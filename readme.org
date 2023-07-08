@@ -1,3 +1,5 @@
 * introduction:
 
   no fancy way to learn programming. no copy paste, just type it!
+
+  just type the code from the book I read.
