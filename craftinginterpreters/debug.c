@@ -13,7 +13,8 @@ static int constantInstruction(const char *name, Chunk *c, int offset) {
 }
 
 static int constantLongInstruction(const char *name, Chunk *c, int offset) {
-  int vidx = (c->code[offset + 3] << 16) | (c->code[offset + 2] << 8) | (c->code[offset + 1]);
+  int vidx = (c->code[offset + 3] << 16) | (c->code[offset + 2] << 8) |
+             (c->code[offset + 1]);
   printf("%-16s %4d '", name, vidx);
   printValue(c->constants.values[vidx]);
   printf("'\n");
