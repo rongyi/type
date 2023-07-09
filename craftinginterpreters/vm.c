@@ -54,6 +54,34 @@ static InterpretResult run() {
         printf("\n");
         break;
       }
+      case OP_NEGATE: {
+        push(-pop());
+        break;
+      }
+      case OP_ADD: {
+        Value v1 = pop();
+        Value v2 = pop();
+        push(v1 + v2);
+        break;
+      }
+      case OP_SUBSTRACT: {
+        Value v1 = pop();
+        Value v2 = pop();
+        push(v2 - v1);
+        break;
+      }
+      case OP_MULTIPLY: {
+        Value v1 = pop();
+        Value v2 = pop();
+        push(v1 * v2);
+        break;
+      }
+      case OP_DIVIDE: {
+        Value v1 = pop();
+        Value v2 = pop();
+        push(v2 / v1);
+        break;
+      }
       case OP_RETURN: {
         printValue(pop());
         printf("\n");
