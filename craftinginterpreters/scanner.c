@@ -100,6 +100,52 @@ static void skipWhitespace() {
   }
 }
 
+static Token string() {
+  while (peek() != '"' && !isAtEnd()) {
+    if (peek() == '\n') {
+      scanner.line_++;
+    }
+    advance();
+  }
+  if (isAtEnd()) {
+    return errorToken("Unterminated string.");
+  }
+  // skip the closing '"'
+  advance();
+
+  return makeToken(TOKEN_STRING);
+}
+
+static bool isDigit(char c) { return c >= '0' && c <= '9'; }
+
+static Token number() {
+  while (isDigit(peek())) {
+    advance();
+  }
+  // fraction part
+  if (peek() == '.' && isDigit(peekNext())) {
+    advance();
+    while (isDigit(peek())) {
+      advance();
+    }
+  }
+
+  return makeToken(TOKEN_NUMBER);
+}
+
+static bool isAlpha(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+}
+
+static TokenType identifierType() { return TOKEN_IDENTIFIER; }
+
+static Token identifier() {
+  while (isAlpha(peek()) || isDigit(peek())) {
+    advance();
+  }
+  return makeToken(identifierType());
+}
+
 Token scanToken() {
   skipWhitespace();
   scanner.start_ = scanner.current_;
@@ -107,6 +153,12 @@ Token scanToken() {
     return makeToken(TOKEN_EOF);
   }
   char c = advance();
+  if (isAlpha(c)) {
+    return identifier();
+  }
+  if (isDigit(c)) {
+    return number();
+  }
   switch (c) {
     case '(':
       return makeToken(TOKEN_LEFT_PAREN);
@@ -150,6 +202,8 @@ Token scanToken() {
         return makeToken(TOKEN_GREATER_EQUAL);
       }
       return makeToken(TOKEN_GREATER);
+    case '"':
+      return string();
   }
 
   return errorToken("Unexpected character.");
