@@ -4,6 +4,7 @@
 
 #include "common.h"
 #include "debug.h"
+#include "compiler.h"
 
 VM vm;
 
@@ -85,8 +86,6 @@ static InterpretResult run() {
       case OP_RETURN: {
         printValue(pop());
         printf("\n");
-        printValue(pop());
-        printf("\n");
         return INTERPRET_OK;
       }
     }
@@ -96,12 +95,20 @@ static InterpretResult run() {
 #undef READ_CONSTANT
 }
 
+InterpretResult interpret(const char *source) {
+  compile(source);
+
+  return INTERPRET_OK;
+}
+
+#if 0
 InterpretResult interpret(Chunk *c) {
   vm.chunk_ = c;
   vm.ip_ = vm.chunk_->code;
 
   return run();
 }
+#endif
 
 void push(Value v) {
   *vm.stack_top_ = v;
