@@ -3,8 +3,8 @@
 #include <stdio.h>
 
 #include "common.h"
-#include "debug.h"
 #include "compiler.h"
+#include "debug.h"
 
 VM vm;
 
@@ -96,7 +96,9 @@ static InterpretResult run() {
 }
 
 InterpretResult interpret(const char *source) {
-  compile(source);
+  Chunk c;
+  initChunk(&c);
+  compile(source, &c);
 
   return INTERPRET_OK;
 }
