@@ -84,7 +84,6 @@ static InterpretResult run() {
         break;
       }
       case OP_RETURN: {
-        printValue(pop());
         printf("\n");
         return INTERPRET_OK;
       }
@@ -98,9 +97,18 @@ static InterpretResult run() {
 InterpretResult interpret(const char *source) {
   Chunk c;
   initChunk(&c);
-  compile(source, &c);
+  if (!compile(source, &c)) {
+    freeChunk(&c);
+    return INTERPRET_COMPILE_ERROR;
+  }
+  writeChunk(&c, OP_RETURN, 1);
+  vm.chunk_ = &c;
+  vm.ip_ = vm.chunk_->code;
 
-  return INTERPRET_OK;
+  InterpretResult ret = run();
+  freeChunk(&c);
+
+  return ret;
 }
 
 #if 0
