@@ -63,8 +63,8 @@ static void runFile(const char *path) {
 int main(int argc, const char *argv[]) {
   initVM();
   /*interpret("1 + 2 * 3");*/
-  interpret("(1 + 2) * 3");
-#if 0
+  /*interpret("(1 + 2) * 3");*/
+#if 1
   if (argc == 1) {
     repl();
   } else if (argc == 2) {
