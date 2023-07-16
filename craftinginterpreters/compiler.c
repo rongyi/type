@@ -126,6 +126,8 @@ static void number() {
   emitConstant(value);
 }
 
+// core part
+// prefix + recursive + loop
 static void parsePrecedence(Precedence prec) {
   advance();
   ParseFn prefixRule = getRule(parser.previous_.type_)->prefix_;

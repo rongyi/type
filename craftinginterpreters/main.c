@@ -62,7 +62,9 @@ static void runFile(const char *path) {
 // new for compiler
 int main(int argc, const char *argv[]) {
   initVM();
-  freeVM();
+  /*interpret("1 + 2 * 3");*/
+  interpret("(1 + 2) * 3");
+#if 0
   if (argc == 1) {
     repl();
   } else if (argc == 2) {
@@ -71,6 +73,8 @@ int main(int argc, const char *argv[]) {
     fprintf(stderr, "Usage: clox [path]\n");
     exit(1);
   }
+#endif
+  freeVM();
 }
 
 #if 0
