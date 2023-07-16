@@ -1,5 +1,6 @@
 #include "vm.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 
 #include "common.h"
@@ -23,10 +24,34 @@ Value readConstantLong() {
 
   return vm.chunk_->constants.values[vidx];
 }
+static Value peek(int distance) { return vm.stack_top_[-1 - distance]; }
+static void runtimeError(const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+  fputs("\n", stderr);
+
+  size_t instruction = vm.ip_ - vm.chunk_->code - 1;
+  int line = vm.chunk_->lines[instruction];
+  fprintf(stderr, "[line %d] in script\n", line);
+  resetStack();
+}
 
 static InterpretResult run() {
 #define READ_BYTE() (*vm.ip_++)
 #define READ_CONSTANT() (vm.chunk_->constants.values[READ_BYTE()])
+#define BINARY_OP(valuetype, op)                      \
+  do {                                                \
+    if (!IS_NUMBER(peek(0)) && !IS_NUMBER(peek(1))) { \
+      runtimeError("Operands mut be numbers.");       \
+      return INTERPRET_RUNTIME_ERROR;                 \
+    }                                                 \
+    double b = AS_NUMBER(pop());                      \
+    double a = AS_NUMBER(pop());                      \
+    push(valuetype(a op b));                          \
+  } while (false)
+
   while (true) {
     // offset is ip - start
 #ifdef DEBUG_TRACE_EXECUTION
@@ -56,31 +81,27 @@ static InterpretResult run() {
         break;
       }
       case OP_NEGATE: {
-        push(-pop());
+        if (!IS_NUMBER(peek(0))) {
+          runtimeError("Operand must be a number");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        push(NUMBER_VAL(-AS_NUMBER(pop())));
         break;
       }
       case OP_ADD: {
-        Value v1 = pop();
-        Value v2 = pop();
-        push(v1 + v2);
+        BINARY_OP(NUMBER_VAL, +);
         break;
       }
       case OP_SUBSTRACT: {
-        Value v1 = pop();
-        Value v2 = pop();
-        push(v2 - v1);
+        BINARY_OP(NUMBER_VAL, -);
         break;
       }
       case OP_MULTIPLY: {
-        Value v1 = pop();
-        Value v2 = pop();
-        push(v1 * v2);
+        BINARY_OP(NUMBER_VAL, *);
         break;
       }
       case OP_DIVIDE: {
-        Value v1 = pop();
-        Value v2 = pop();
-        push(v2 / v1);
+        BINARY_OP(NUMBER_VAL, /);
         break;
       }
       case OP_RETURN: {

@@ -26,6 +26,4 @@ void freeValueArray(ValueArray *va) {
   initValueArray(va);
 }
 
-void printValue(Value v) {
-  printf("%g", v);
-}
+void printValue(Value v) { printf("%g", AS_NUMBER(v)); }

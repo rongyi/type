@@ -123,7 +123,7 @@ static void emitConstant(Value v) { emitBytes(OP_CONSTANT, makeConstant(v)); }
 
 static void number() {
   double value = strtod(parser.previous_.start_, NULL);
-  emitConstant(value);
+  emitConstant(NUMBER_VAL(value));
 }
 
 // core part
