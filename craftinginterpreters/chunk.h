@@ -14,6 +14,7 @@ typedef enum {
   OP_SUBSTRACT,
   OP_MULTIPLY,
   OP_DIVIDE,
+  OP_NOT,
   OP_NEGATE,  // no operand, other instruction push to stack
   OP_RETURN,
 } OpCode;

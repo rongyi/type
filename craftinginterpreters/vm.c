@@ -38,6 +38,10 @@ static void runtimeError(const char *format, ...) {
   resetStack();
 }
 
+static bool isFalsey(Value v) {
+  return IS_NIL(v) || (IS_BOOL(v) && !AS_BOOL(v));
+}
+
 static InterpretResult run() {
 #define READ_BYTE() (*vm.ip_++)
 #define READ_CONSTANT() (vm.chunk_->constants.values[READ_BYTE()])
@@ -113,6 +117,9 @@ static InterpretResult run() {
         BINARY_OP(NUMBER_VAL, /);
         break;
       }
+      case OP_NOT:
+        push(BOOL_VAL(isFalsey(pop())));
+        break;
       case OP_RETURN: {
         printValue(pop());
         printf("\n");
