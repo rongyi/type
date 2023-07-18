@@ -6,6 +6,7 @@
 #include "common.h"
 #include "compiler.h"
 #include "debug.h"
+#include "value.h"
 
 VM vm;
 
@@ -93,6 +94,20 @@ static InterpretResult run() {
       case OP_FALSE:
         push(BOOL_VAL(false));
         break;
+      case OP_EQUAL: {
+        Value b = pop();
+        Value a = pop();
+        push(BOOL_VAL(valuesEqual(a, b)));
+        break;
+      }
+      case OP_GREATER: {
+        BINARY_OP(BOOL_VAL, >);
+        break;
+      }
+      case OP_LESS: {
+        BINARY_OP(BOOL_VAL, <);
+        break;
+      }
       case OP_NEGATE: {
         if (!IS_NUMBER(peek(0))) {
           runtimeError("Operand must be a number");
