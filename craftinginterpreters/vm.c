@@ -74,15 +74,15 @@ static InterpretResult run() {
       case OP_CONSTANT: {
         Value constant = READ_CONSTANT();
         push(constant);
-        printValue(constant);
-        printf("\n");
+        /*printValue(constant);*/
+        /*printf("\n");*/
         break;
       }
       case OP_CONSTANT_LONG: {
         Value constant = readConstantLong();
         push(constant);
-        printValue(constant);
-        printf("\n");
+        /*printValue(constant);*/
+        /*printf("\n");*/
         break;
       }
       case OP_NIL:
@@ -136,6 +136,7 @@ static InterpretResult run() {
         push(BOOL_VAL(isFalsey(pop())));
         break;
       case OP_RETURN: {
+        /*printf("return\n");*/
         printValue(pop());
         printf("\n");
         return INTERPRET_OK;
