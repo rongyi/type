@@ -2,6 +2,7 @@
 #define clox_vm_h
 
 #include "chunk.h"
+#include "hash_table.h"
 #include "value.h"
 
 #define STACK_MAX 256
@@ -15,6 +16,7 @@ typedef struct {
   // point ot next place to write!
   Value *stack_top_;
   Obj *objects_head_;
+  Table string_set_;
 } VM;
 
 extern VM vm;

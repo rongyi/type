@@ -18,9 +18,13 @@ static void resetStack() { vm.stack_top_ = vm.stack_; }
 void initVM() {
   resetStack();
   vm.objects_head_ = NULL;
+  initTable(&vm.string_set_);
 }
 
-void freeVM() { freeObjects(); }
+void freeVM() {
+  freeTable(&vm.string_set_);
+  freeObjects();
+}
 
 Value readConstantLong() {
   // ip already at operand position

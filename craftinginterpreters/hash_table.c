@@ -128,3 +128,25 @@ bool tableDelete(Table *table, ObjString *key) {
 
   return true;
 }
+
+ObjString *tableFindString(Table *table, const char *chars, int len,
+                           uint32_t hash) {
+  if (table->count_ == 0) {
+    return NULL;
+  }
+
+  uint32_t idx = hash % table->capacity_;
+  while (true) {
+    Entry *cur = &table->entries_[idx];
+    if (cur->key_ == NULL) {
+      if (IS_NIL(cur->value_)) {
+        return NULL;
+      }
+    } else if (cur->key_->length_ == len && cur->key_->hash_ == hash &&
+               memcmp(cur->key_->chars_, chars, len) == 0) {
+      return cur->key_;
+    }
+
+    idx = (idx + 1) % table->capacity_;
+  }
+}

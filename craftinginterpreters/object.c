@@ -41,17 +41,30 @@ static uint32_t hashString(const char *key, int len) {
   return hash;
 }
 
+// here the start is in token, we don't touch it
 ObjString *copyString(const char *start, int len) {
+  uint32_t hash = hashString(start, len);
+  ObjString *interned = tableFindString(&vm.string_set_, start, len, hash);
+  if (interned != NULL) {
+    return interned;
+  }
+
   char *heap_chars = ALLOCATE(char, len + 1);
   memcpy(heap_chars, start, len);
   heap_chars[len] = '\0';
 
-  uint32_t hash = hashString(start, len);
   return allocateString(heap_chars, len, hash);
 }
 
 ObjString *takeString(char *chars, int len) {
   uint32_t hash = hashString(chars, len);
+  ObjString *interned = tableFindString(&vm.string_set_, chars, len, hash);
+  if (interned != NULL) {
+    // we own this chars, don't use it, release it
+    FREE_ARRAY(char, chars, len + 1);
+    return interned;
+  }
+
   return allocateString(chars, len, hash);
 }
 
