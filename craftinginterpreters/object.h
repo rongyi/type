@@ -17,6 +17,8 @@ struct ObjString {
   ObjType type_;
   int length_;
   char *chars_;
+  uint32_t hash_;  // hash cache for current string, when string as key of as
+                   // hash table
 };
 
 #define OBJ_TYPE(value) (AS_OBJ(value)->type_)
