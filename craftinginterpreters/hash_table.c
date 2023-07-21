@@ -23,11 +23,25 @@ void freeTable(Table *table) {
 // find the first empty slot or key equals search key
 static Entry *findEntry(Entry *entries, int capacity, ObjString *key) {
   uint32_t idx = key->hash_ % capacity;
+  Entry *tomestone = NULL;
   while (true) {
     Entry *cur = &entries[idx];
-    if (cur->key_ == key || cur->key_ == NULL) {
+    if (cur->key_ == NULL) {
+      if (IS_NIL(cur->value_)) {
+        if (tomestone != NULL) {
+          return tomestone;
+        }
+        return cur;
+      } else {
+        // a tomestone in this slot, use first occurance
+        if (tomestone == NULL) {
+          tomestone = cur;
+        }
+      }
+    } else if (cur->key_ == key) {
       return cur;
     }
+
     idx = (idx + 1) % capacity;
   }
 }
@@ -80,4 +94,32 @@ void tableAddAll(Table *from, Table *to) {
       tableSet(to, cur->key_, cur->value_);
     }
   }
+}
+
+bool tableGet(Table *table, ObjString *key, Value *out) {
+  if (table->count_ == 0) {
+    return false;
+  }
+  Entry *entry = findEntry(table->entries_, table->capacity_, key);
+  if (entry->key_ == NULL) {
+    return false;
+  }
+  *out = entry->value_;
+
+  return true;
+}
+
+bool tableDelete(Table *table, ObjString *key) {
+  if (table->count_ == 0) {
+    return false;
+  }
+  Entry *entry = findEntry(table->entries_, table->capacity_, key);
+  if (entry->key_ == NULL) {
+    return false;
+  }
+  entry->key_ = NULL;
+  // a tomestone indicator
+  entry->value_ = BOOL_VAL(true);
+
+  return true;
 }
