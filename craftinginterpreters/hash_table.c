@@ -52,6 +52,7 @@ static void adjustCapacity(Table *table, int newcap) {
     entries[i].key_ = NULL;
     entries[i].value_ = NIL_VAL;
   }
+  table->count_ = 0;
 
   // "memcpy" for hash table
   for (int i = 0; i < table->capacity_; i++) {
@@ -62,6 +63,7 @@ static void adjustCapacity(Table *table, int newcap) {
     Entry *dest = findEntry(entries, newcap, cur->key_);
     dest->key_ = cur->key_;
     dest->value_ = cur->value_;
+    table->count_++;
   }
 
   FREE_ARRAY(Entry, table->entries_, table->capacity_);
@@ -77,7 +79,10 @@ bool tableSet(Table *table, ObjString *key, Value v) {
   }
   Entry *entry = findEntry(table->entries_, table->capacity_, key);
   bool is_new = entry->key_ == NULL;
-  if (is_new) {
+  // consider tomestone to be full buckets
+  // reuse don't increse count
+  // only the fresh slot is taken, we increase the count
+  if (is_new && IS_NIL(entry->value_)) {
     table->count_++;
   }
 
