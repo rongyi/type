@@ -14,6 +14,10 @@ static Obj *allocateObjectWithType(size_t size, ObjType type) {
   // only size, no type
   Obj *ret = (Obj *)reallocate(NULL, 0, size);
   ret->type_ = type;
+  // insert in header next
+  ret->next_ = vm.objects_head_;
+
+  vm.objects_head_ = ret;
 
   return ret;
 }
@@ -32,5 +36,9 @@ ObjString *copyString(const char *start, int len) {
   heap_chars[len] = '\0';
 
   return allocateString(heap_chars, len);
+}
+
+ObjString *takeString(char *chars, int len) {
+  return allocateString(chars, len);
 }
 

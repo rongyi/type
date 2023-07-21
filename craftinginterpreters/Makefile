@@ -11,7 +11,7 @@ INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 CPPFLAGS ?= $(INC_FLAGS) -g
 
 $(TARGET): $(OBJS)
-	gcc --std=c99 $(LDFLAGS) $(OBJS) -o $@ $(LOADLIBES) $(LDLIBS)
+	gcc --std=c99 -g $(LDFLAGS) $(OBJS) -o $@ $(LOADLIBES) $(LDLIBS)
 
 .PHONY: clean
 clean:

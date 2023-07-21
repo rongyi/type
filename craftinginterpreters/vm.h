@@ -14,7 +14,10 @@ typedef struct {
   Value stack_[STACK_MAX];
   // point ot next place to write!
   Value *stack_top_;
+  Obj *objects_head_;
 } VM;
+
+extern VM vm;
 
 void initVM();
 void freeVM();

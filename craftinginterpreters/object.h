@@ -10,6 +10,7 @@ typedef enum {
 
 struct Obj {
   ObjType type_;
+  struct Obj *next_;
 };
 
 struct ObjString {
@@ -29,5 +30,6 @@ static inline bool isObjType(Value v, ObjType expect) {
 }
 
 ObjString *copyString(const char *start, int len);
+ObjString *takeString(char *chars, int len);
 
 #endif
