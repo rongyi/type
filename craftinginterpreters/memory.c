@@ -1,5 +1,6 @@
 #include "memory.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "object.h"
@@ -23,18 +24,23 @@ static void freeObject(Obj *o) {
   switch (o->type_) {
     case OBJ_STRING: {
       ObjString *cur = (ObjString *)o;
+      /*printf("free string: %s\n", cur->chars_);*/
       FREE_ARRAY(char, cur->chars_, cur->length_ + 1);
       FREE(ObjString, o);
       break;
+    }
+    default: {
+      /*printf("what the fuck! %d\n", o->type_);*/
     }
   }
 }
 
 void freeObjects() {
-  Obj *o = vm.objects_head_;
-  while (o != NULL) {
-    Obj *next = o->next_;
-    freeObject(o);
-    o = next;
+  Obj *cur = vm.objects_head_;
+  while (cur != NULL) {
+    Obj *next = cur->next_;
+    /*printf("free: %p\n", cur);*/
+    freeObject(cur);
+    cur = next;
   }
 }

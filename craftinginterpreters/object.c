@@ -16,6 +16,8 @@ static Obj *allocateObjectWithType(size_t size, ObjType type) {
   ret->type_ = type;
   // insert in header next
   ret->next_ = vm.objects_head_;
+  /*printf("allocateObjectWithType: %d\n", type);*/
+  /*printf("newly create obj nextto : %p\n", ret->next_);*/
 
   vm.objects_head_ = ret;
 
@@ -23,10 +25,12 @@ static Obj *allocateObjectWithType(size_t size, ObjType type) {
 }
 
 static ObjString *allocateString(char *chars, int len, uint32_t hash) {
+  printf("allocateString\n");
   ObjString *ret = ALLOCATE_OBJ(ObjString, OBJ_STRING);
   ret->length_ = len;
   ret->chars_ = chars;
   ret->hash_ = hash;
+  tableSet(&vm.string_set_, ret, NIL_VAL);
 
   return ret;
 }

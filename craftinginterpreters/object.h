@@ -14,7 +14,7 @@ struct Obj {
 };
 
 struct ObjString {
-  ObjType type_;
+  Obj base_;
   int length_;
   char *chars_;
   uint32_t hash_;  // hash cache for current string, when string as key of as

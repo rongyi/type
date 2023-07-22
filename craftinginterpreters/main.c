@@ -62,7 +62,7 @@ static void runFile(const char *path) {
 // new for compiler
 int main(int argc, const char *argv[]) {
   initVM();
-  /*interpret("1 + 2 * 3");*/
+  /*interpret("\"a\" == \"a\"");*/
   /*interpret("(1 + 2) * 3");*/
 #if 1
   if (argc == 1) {

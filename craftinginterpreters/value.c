@@ -68,24 +68,8 @@ bool valuesEqual(Value a, Value b) {
       return true;
     case VAL_NUMBER:
       return AS_NUMBER(a) == AS_NUMBER(b);
-    case VAL_OBJ: {
-      // not same object
-      if (OBJ_TYPE(a) != OBJ_TYPE(b)) {
-        return false;
-      }
-      switch (OBJ_TYPE(a)) {
-        case OBJ_STRING: {
-          ObjString *sa = AS_STRING(a);
-          ObjString *sb = AS_STRING(b);
-          return sa->length_ == sb->length_ &&
-                 memcmp(sa->chars_, sb->chars_, sa->length_) == 0;
-          break;
-        }
-          // TODO
-        default:
-          return false;
-      }
-    }
+    case VAL_OBJ:
+      return AS_OBJ(a) == AS_OBJ(b);
     default:
       return false;
   }
