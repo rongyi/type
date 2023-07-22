@@ -48,6 +48,8 @@ static void expression();
 static PraseRule *getRule(TokenType t);
 static void parsePrecedence(Precedence prec);
 static void literal();
+static void statement();
+static void declaration();
 
 static void errorAt(Token *token, const char *message) {
   if (parser.panicMode_) {
@@ -277,6 +279,30 @@ static void literal() {
   }
 }
 
+static bool check(TokenType type) { return parser.current_.type_ == type; }
+
+static bool match(TokenType type) {
+  if (!check(type)) {
+    return false;
+  }
+  advance();
+  return true;
+}
+
+static void printStatement() {
+  expression();
+  consume(TOKEN_SEMICOLON, "Expect ; after value.");
+  emitByte(OP_PRINT);
+}
+
+static void statement() {
+  if (match(TOKEN_PRINT)) {
+    printStatement();
+  }
+}
+
+static void declaration() { statement(); }
+
 bool compile(const char *source, Chunk *c) {
   initScanner(source);
   compilingChunk = c;
@@ -285,7 +311,10 @@ bool compile(const char *source, Chunk *c) {
   parser.hadError_ = false;
 
   advance();
-  expression();
+  /*expression();*/
+  while (!match(TOKEN_EOF)) {
+    declaration();
+  }
   consume(TOKEN_EOF, "expect end of expression");
   endCompiler();
 

@@ -166,10 +166,14 @@ static InterpretResult run() {
       case OP_NOT:
         push(BOOL_VAL(isFalsey(pop())));
         break;
-      case OP_RETURN: {
-        /*printf("return\n");*/
+      case OP_PRINT:
         printValue(pop());
         printf("\n");
+        break;
+      case OP_RETURN: {
+        // goodbye, return, we have print now
+        /*printValue(pop());*/
+        /*printf("\n");*/
         return INTERPRET_OK;
       }
     }
