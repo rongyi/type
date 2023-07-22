@@ -295,13 +295,85 @@ static void printStatement() {
   emitByte(OP_PRINT);
 }
 
+static void expressionStatement() {
+  expression();
+  consume(TOKEN_SEMICOLON, "Expect ';' after expression");
+  emitByte(OP_POP);
+}
+
+// Every bytecode instruction has a stack effect that describes how the
+// instruction modifies the stack. For example, OP_ADD pops two values and
+// pushes one, leaving the stack one element smaller than before.
+//
+// The bytecode for an entire statement has a total stack effect of zero. Since
+// a statement produces no values, it ultimately leaves the stack unchanged,
+// though it of course uses the stack while it’s doing its thing.
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else {
+    expressionStatement();
   }
 }
 
-static void declaration() { statement(); }
+static void synchronize() {
+  parser.panicMode_ = false;
+  while (parser.current_.type_ != TOKEN_EOF) {
+    if (parser.previous_.type_ == TOKEN_SEMICOLON) {
+      return;
+    }
+    switch (parser.current_.type_) {
+      case TOKEN_CLASS:
+      case TOKEN_FUN:
+      case TOKEN_VAR:
+      case TOKEN_FOR:
+      case TOKEN_IF:
+      case TOKEN_WHILE:
+      case TOKEN_PRINT:
+      case TOKEN_RETURN:
+        return;
+      default: {
+        ;  // do nothing
+      }
+    }
+  }
+}
+
+static uint8_t identifierConstant(Token *name) {
+  return makeConstant(OBJ_VAL(copyString(name->start_, name->length_)));
+}
+
+static uint8_t parseVariable(const char *errorMessage) {
+  consume(TOKEN_IDENTIFIER, errorMessage);
+  return identifierConstant(&parser.previous_);
+}
+
+static void defineVariable(uint8_t global_idx) {
+  emitBytes(OP_DEFINE_GLOBAL, global_idx);
+}
+
+static void varDeclaration() {
+  uint8_t global_idx = parseVariable("Expect variable name.");
+  if (match(TOKEN_EQUAL)) {
+    expression();
+  } else {
+    emitByte(OP_NIL);
+  }
+  consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration");
+
+  defineVariable(global_idx);
+}
+
+static void declaration() {
+  if (match(TOKEN_VAR)) {
+    varDeclaration();
+  } else {
+    statement();
+  }
+  if (parser.panicMode_) {
+    synchronize();
+  }
+}
 
 bool compile(const char *source, Chunk *c) {
   initScanner(source);
