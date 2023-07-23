@@ -122,6 +122,18 @@ static InterpretResult run() {
       case OP_POP:
         pop();
         break;
+      case OP_GET_GLOBAL: {
+        // constant idx put in code array
+        ObjString *key = READ_STRING();
+        Value v;
+        if (!tableGet(&vm.globals_, key, &v)) {
+          runtimeError("Undefined variable '%s'.", key->chars_);
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        push(v);
+        break;
+      }
+
       case OP_DEFINE_GLOBAL: {
         ObjString *name = READ_STRING();
         tableSet(&vm.globals_, name, peek(0));

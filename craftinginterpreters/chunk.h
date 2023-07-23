@@ -12,6 +12,7 @@ typedef enum {
   OP_FALSE,
   OP_POP,
   OP_DEFINE_GLOBAL,
+  OP_GET_GLOBAL,
   OP_EQUAL,  // no <=  and >= ? why? >= -> !< and <= -> !>
   OP_GREATER,
   OP_LESS,

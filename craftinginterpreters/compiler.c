@@ -50,6 +50,7 @@ static void parsePrecedence(Precedence prec);
 static void literal();
 static void statement();
 static void declaration();
+static void variable();
 
 static void errorAt(Token *token, const char *message) {
   if (parser.panicMode_) {
@@ -238,7 +239,7 @@ PraseRule rules[] = {
     [TOKEN_GREATER_EQUAL] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_LESS] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
-    [TOKEN_IDENTIFIER] = {NULL, NULL, PREC_NONE},
+    [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
     [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
     [TOKEN_AND] = {NULL, NULL, PREC_NONE},
@@ -363,6 +364,13 @@ static void varDeclaration() {
 
   defineVariable(global_idx);
 }
+
+static void namedVariable(Token name) {
+  uint8_t idx = identifierConstant(&name);
+  emitBytes(OP_GET_GLOBAL, idx);
+}
+
+static void variable() { namedVariable(parser.previous_); }
 
 static void declaration() {
   if (match(TOKEN_VAR)) {
