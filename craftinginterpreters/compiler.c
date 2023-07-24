@@ -404,7 +404,9 @@ static void addLocal(Token name) {
   // only record their token name, no binding yet;
   // so where is the binding take place?
   local->name_ = name;
-  local->depth_ = currentCompiler->scope_depth_;
+  /*local->depth_ = currentCompiler->scope_depth_;*/
+  // mark as uninitialized
+  local->depth_ = -1;
 }
 
 static bool identifierEqual(Token *a, Token *b) {
@@ -447,9 +449,15 @@ static uint8_t parseVariable(const char *errorMessage) {
   return identifierConstant(&parser.previous_);
 }
 
+static void markInitialized() {
+  currentCompiler->locals_[currentCompiler->local_count_ - 1].depth_ =
+      currentCompiler->scope_depth_;
+}
+
 static void defineVariable(uint8_t global_idx) {
   // don't emit global when in local stats
   if (currentCompiler->scope_depth_ > 0) {
+    markInitialized();
     return;
   }
   emitBytes(OP_DEFINE_GLOBAL, global_idx);
@@ -477,6 +485,9 @@ static int resolveLocal(Compiler *c, Token *name) {
   for (int i = c->local_count_ - 1; i >= 0; i--) {
     Local *cur = &c->locals_[i];
     if (identifierEqual(name, &cur->name_)) {
+      if (cur->depth_ == -1) {
+        error("Can't read local variable in its own initializer.");
+      }
       return i;
     }
   }
