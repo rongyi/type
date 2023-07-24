@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "common.h"
 #include "object.h"
@@ -40,7 +41,19 @@ typedef struct {
   Precedence prec_;
 } PraseRule;
 
+typedef struct {
+  Token name_;
+  int depth_;
+} Local;
+
+typedef struct {
+  Local locals_[UINT8_COUNT];
+  int local_count_;
+  int scope_depth_;
+} Compiler;
+
 Parser parser;
+Compiler *currentCompiler;
 Chunk *compilingChunk;
 static Chunk *currentChunk() { return compilingChunk; }
 
@@ -52,6 +65,12 @@ static void statement();
 static void declaration();
 static void variable(bool can_assign);
 static bool match(TokenType type);
+
+static void initCompiler(Compiler *c) {
+  c->local_count_ = 0;
+  c->scope_depth_ = 0;
+  currentCompiler = c;
+}
 
 static void errorAt(Token *token, const char *message) {
   if (parser.panicMode_) {
@@ -309,6 +328,27 @@ static void expressionStatement() {
   emitByte(OP_POP);
 }
 
+static void block() {
+  while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+    declaration();
+  }
+
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+}
+static void beginScope() { currentCompiler->scope_depth_++; }
+static void endScope() {
+  // current scope_depth_ minus one
+  currentCompiler->scope_depth_--;
+
+  // pop current sccope
+  while (currentCompiler->local_count_ > 0 &&
+         currentCompiler->locals_[currentCompiler->local_count_ - 1].depth_ >
+             currentCompiler->scope_depth_) {
+    emitByte(OP_POP);
+    currentCompiler->local_count_--;
+  }
+}
+
 // Every bytecode instruction has a stack effect that describes how the
 // instruction modifies the stack. For example, OP_ADD pops two values and
 // pushes one, leaving the stack one element smaller than before.
@@ -319,6 +359,10 @@ static void expressionStatement() {
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else if (match(TOKEN_LEFT_BRACE)) {
+    beginScope();
+    block();
+    endScope();
   } else {
     expressionStatement();
   }
@@ -351,12 +395,63 @@ static uint8_t identifierConstant(Token *name) {
   return makeConstant(OBJ_VAL(copyString(name->start_, name->length_)));
 }
 
+static void addLocal(Token name) {
+  if (currentCompiler->local_count_ == UINT8_COUNT) {
+    error("Too many local variable in function");
+    return;
+  }
+  Local *local = &currentCompiler->locals_[currentCompiler->local_count_++];
+  // only record their token name, no binding yet;
+  // so where is the binding take place?
+  local->name_ = name;
+  local->depth_ = currentCompiler->scope_depth_;
+}
+
+static bool identifierEqual(Token *a, Token *b) {
+  if (a->length_ != b->length_) {
+    return false;
+  }
+
+  return memcmp(a->start_, b->start_, a->length_) == 0;
+}
+
+static void declareVariable() {
+  // global stat, this function is to service local variable
+  if (currentCompiler->scope_depth_ == 0) {
+    return;
+  }
+  Token *name = &parser.previous_;
+  for (int i = currentCompiler->local_count_ - 1; i >= 0; i--) {
+    Local *cur = &currentCompiler->locals_[i];
+    // -1 means?
+    // to another level, we are done, break it
+    if (cur->depth_ != -1 && cur->depth_ < currentCompiler->scope_depth_) {
+      break;
+    }
+    if (identifierEqual(name, &cur->name_)) {
+      error("Already a variable with this name in this sccope");
+    }
+  }
+  addLocal(*name);
+}
+
 static uint8_t parseVariable(const char *errorMessage) {
   consume(TOKEN_IDENTIFIER, errorMessage);
+
+  declareVariable();
+  // return a dummy index;
+  if (currentCompiler->scope_depth_ > 0) {
+    return 0;
+  }
+
   return identifierConstant(&parser.previous_);
 }
 
 static void defineVariable(uint8_t global_idx) {
+  // don't emit global when in local stats
+  if (currentCompiler->scope_depth_ > 0) {
+    return;
+  }
   emitBytes(OP_DEFINE_GLOBAL, global_idx);
 }
 
@@ -372,14 +467,42 @@ static void varDeclaration() {
   defineVariable(global_idx);
 }
 
+/* Whenever a variable is declared, we append it to the locals array in
+ * Compiler. That means the first local variable is at index zero, the next one
+ * is at index one, and so on. In other words, the locals array in the compiler
+ * has the exact same layout as the VM’s stack will have at runtime. The
+ * variable’s index in the locals array is the same as its stack slot. How
+ * convenient!*/
+static int resolveLocal(Compiler *c, Token *name) {
+  for (int i = c->local_count_ - 1; i >= 0; i--) {
+    Local *cur = &c->locals_[i];
+    if (identifierEqual(name, &cur->name_)) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
 static void namedVariable(Token name, bool can_assign) {
-  uint8_t idx = identifierConstant(&name);
+  uint8_t get_op;
+  uint8_t set_op;
+  int idx = resolveLocal(currentCompiler, &name);
+  if (idx != -1) {
+    get_op = OP_GET_LOCAL;
+    set_op = OP_SET_LOCAL;
+  } else {
+    idx = identifierConstant(&name);
+    get_op = OP_GET_GLOBAL;
+    set_op = OP_SET_GLOBAL;
+  }
+
   if (can_assign && match(TOKEN_EQUAL)) {
     // the value part
     expression();
-    emitBytes(OP_SET_GLOBAL, idx);
+    emitBytes(set_op, (uint8_t)idx);
   } else {
-    emitBytes(OP_GET_GLOBAL, idx);
+    emitBytes(get_op, (uint8_t)idx);
   }
 }
 
@@ -400,6 +523,9 @@ static void declaration() {
 
 bool compile(const char *source, Chunk *c) {
   initScanner(source);
+  Compiler compiler;
+  initCompiler(&compiler);
+
   compilingChunk = c;
 
   parser.panicMode_ = false;
