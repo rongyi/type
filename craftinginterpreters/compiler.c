@@ -349,6 +349,41 @@ static void endScope() {
   }
 }
 
+static int emitJump(OpCode code) {
+  emitByte(code);
+  emitByte(0xff);
+  emitByte(0xff);
+
+  return currentChunk()->count - 2;
+}
+
+static void patchJump(int jump_pos) {
+  int real_step = currentChunk()->count - jump_pos - 2;
+  if (real_step > UINT16_MAX) {
+    error("Too much code to jump over");
+  }
+  currentChunk()->code[jump_pos] = (real_step & 0xff);
+  currentChunk()->code[jump_pos + 1] = ((real_step >> 8) & 0xff);
+}
+
+static void ifStatement() {
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'if'");
+
+  int then_jump = emitJump(OP_JUMP_IF_FALSE);
+  emitByte(OP_POP);
+  statement();
+  int else_jump = emitJump(OP_JUMP);
+  patchJump(then_jump);
+
+  emitByte(OP_POP);
+  if (match(TOKEN_ELSE)) {
+    statement();
+  }
+  patchJump(else_jump);
+}
+
 // Every bytecode instruction has a stack effect that describes how the
 // instruction modifies the stack. For example, OP_ADD pops two values and
 // pushes one, leaving the stack one element smaller than before.
@@ -359,6 +394,8 @@ static void endScope() {
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else if (match(TOKEN_IF)) {
+    ifStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
     block();

@@ -71,6 +71,7 @@ static InterpretResult run() {
 #define READ_BYTE() (*vm.ip_++)
 #define READ_CONSTANT() (vm.chunk_->constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
+#define READ_SHORT() (vm.ip_ += 2, (uint16_t)((vm.ip_[-1] << 8) | (vm.ip_[-2])))
 #define BINARY_OP(valuetype, op)                      \
   do {                                                \
     if (!IS_NUMBER(peek(0)) && !IS_NUMBER(peek(1))) { \
@@ -218,6 +219,19 @@ static InterpretResult run() {
         printValue(pop());
         printf("\n");
         break;
+      case OP_JUMP_IF_FALSE: {
+        uint16_t offset = READ_SHORT();
+        if (isFalsey(peek(0))) {
+          vm.ip_ += offset;
+        }
+        break;
+      }
+      case OP_JUMP: {
+        uint16_t offset = READ_SHORT();
+        vm.ip_ += offset;
+        break;
+      }
+
       case OP_RETURN: {
         // goodbye, return, we have print now
         /*printValue(pop());*/
@@ -230,6 +244,7 @@ static InterpretResult run() {
 #undef READ_BYTE
 #undef READ_CONSTANT
 #undef READ_STRING
+#undef READ_SHORT
 }
 
 InterpretResult interpret(const char *source) {
