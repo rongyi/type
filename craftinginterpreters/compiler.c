@@ -65,6 +65,9 @@ static void statement();
 static void declaration();
 static void variable(bool can_assign);
 static bool match(TokenType type);
+static int emitJump(OpCode code);
+static void patchJump(int jump_pos);
+static void varDeclaration();
 
 static void initCompiler(Compiler *c) {
   c->local_count_ = 0;
@@ -245,6 +248,31 @@ static void string(bool can_assign) {
       copyString(parser.previous_.start_ + 1, parser.previous_.length_ - 2)));
 }
 
+static void and_(bool can_assign) {
+  // short cut, false, jump to end;
+  // when we meet false, no execution for the lest expression
+  int endJump = emitJump(OP_JUMP_IF_FALSE);
+  // the current true value, pop it
+  emitByte(OP_POP);
+  parsePrecedence(PREC_AND);
+  patchJump(endJump);
+}
+
+static void or_(bool can_assign) {
+  // true will jump to end
+  // else don't jump, but how todo
+  // we put a guard before this jump
+  // that is false jump
+  int else_jump = emitJump(OP_JUMP_IF_FALSE);
+  int end_jump = emitJump(OP_JUMP);
+  patchJump(else_jump);
+  // the true value in stack top
+  emitByte(OP_POP);
+
+  parsePrecedence(PREC_OR);
+  patchJump(end_jump);
+}
+
 PraseRule rules[] = {
     [TOKEN_LEFT_PAREN] = {grouping, NULL, PREC_NONE},
     [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
@@ -268,7 +296,7 @@ PraseRule rules[] = {
     [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
     [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
-    [TOKEN_AND] = {NULL, NULL, PREC_NONE},
+    [TOKEN_AND] = {NULL, and_, PREC_AND},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
     [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
     [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
@@ -276,7 +304,7 @@ PraseRule rules[] = {
     [TOKEN_FUN] = {NULL, NULL, PREC_NONE},
     [TOKEN_IF] = {NULL, NULL, PREC_NONE},
     [TOKEN_NIL] = {literal, NULL, PREC_NONE},
-    [TOKEN_OR] = {NULL, NULL, PREC_NONE},
+    [TOKEN_OR] = {NULL, or_, PREC_OR},
     [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},
     [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
     [TOKEN_SUPER] = {NULL, NULL, PREC_NONE},
@@ -349,6 +377,9 @@ static void endScope() {
   }
 }
 
+// return the jump code start pos
+// |jmp|  |  |
+//   ^
 static int emitJump(OpCode code) {
   emitByte(code);
   emitByte(0xff);
@@ -358,10 +389,13 @@ static int emitJump(OpCode code) {
 }
 
 static void patchJump(int jump_pos) {
+  //  current - (jump_pos + 2)
+  //  the instruction need to jump
   int real_step = currentChunk()->count - jump_pos - 2;
   if (real_step > UINT16_MAX) {
     error("Too much code to jump over");
   }
+  // this is different with book, I like bigendian
   currentChunk()->code[jump_pos] = (real_step & 0xff);
   currentChunk()->code[jump_pos + 1] = ((real_step >> 8) & 0xff);
 }
@@ -383,6 +417,95 @@ static void ifStatement() {
   }
   patchJump(else_jump);
 }
+static void emitLoop(int loop_start) {
+  emitByte(OP_LOOP);
+  // and there are two uint8_t of operand
+  // we dont pushed in, but we count them before
+  int offset = currentChunk()->count + 2 - loop_start;
+  if (offset > UINT16_MAX) {
+    error("Loop body too large");
+  }
+  // big endian
+  emitByte(offset & 0xff);
+  emitByte((offset >> 8) & 0xff);
+}
+
+static void whileStatement() {
+  int loop_start = currentChunk()->count;
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'while'.");
+
+  int exit_jump = emitJump(OP_JUMP_IF_FALSE);
+  // true action, 1. pop expression value
+  emitByte(OP_POP);
+  statement();
+  emitLoop(loop_start);
+
+  patchJump(exit_jump);
+  emitByte(OP_POP);
+}
+
+static void forStatement() {
+  // a simple dead loop: for(;;)
+  beginScope();
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'");
+  // initializer part
+  if (match(TOKEN_SEMICOLON)) {
+    // no initializer
+  } else if (match(TOKEN_VAR)) {
+    varDeclaration();
+  } else {
+    expressionStatement();
+  }
+  /*consume(TOKEN_SEMICOLON, "Expect ';'.");*/
+  int loop_start = currentChunk()->count;
+
+  // condition part
+  int exit_jump = -1;
+  if (!match(TOKEN_SEMICOLON)) {
+    expression();
+    consume(TOKEN_SEMICOLON, "Expect ';' after loop condition.");
+
+    exit_jump = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP);  // condition val in stack pop
+  }
+
+  if (!match(TOKEN_RIGHT_PAREN)) {
+    // we compile increment part, but we don't execute this part
+    // we need first go to body part,
+    // so here is a unconditional jump to body
+    int body_jump = emitJump(OP_JUMP);
+    int increment_start = currentChunk()->count;
+    expression();
+    emitByte(OP_POP);
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
+
+    // go to the condition part after increment execution
+    emitLoop(loop_start);
+    // this value is hacked,
+    // after the body, we goto increment part
+    loop_start = increment_start;
+    // when patchJump shows, means we need to jump all the instruction above
+    patchJump(body_jump);
+  }
+
+  /*consume(TOKEN_SEMICOLON, "Expect ';'.");*/
+  /*consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clause.");*/
+
+  // body
+  statement();
+  // so after the body, we go to loop_start
+  // but this value is hacked in increment part
+  // let's see
+  emitLoop(loop_start);
+  // after the body and loop, means we jump to end
+  if (exit_jump != -1) {
+    patchJump(exit_jump);
+    emitByte(OP_POP);  // condition val
+  }
+  endScope();
+}
 
 // Every bytecode instruction has a stack effect that describes how the
 // instruction modifies the stack. For example, OP_ADD pops two values and
@@ -400,6 +523,10 @@ static void statement() {
     beginScope();
     block();
     endScope();
+  } else if (match(TOKEN_WHILE)) {
+    whileStatement();
+  } else if (match(TOKEN_FOR)) {
+    forStatement();
   } else {
     expressionStatement();
   }
