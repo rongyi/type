@@ -47,6 +47,7 @@ typedef struct {
 } Local;
 
 typedef struct {
+  // locals_ save variable name
   Local locals_[UINT8_COUNT];
   int local_count_;
   int scope_depth_;
