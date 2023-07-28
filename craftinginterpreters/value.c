@@ -49,10 +49,17 @@ void printValue(Value v) {
   }
 }
 
+static void printFunction(ObjFunction *f) {
+  printf("<fn %s>", f->name_->chars_);
+}
+
 void printObject(Value v) {
   switch (OBJ_TYPE(v)) {
     case OBJ_STRING:
       printf("%s", AS_CSTRING(v));
+      break;
+    case OBJ_FUNCTION:
+      printFunction(AS_FUNCTION(v));
       break;
   }
 }
