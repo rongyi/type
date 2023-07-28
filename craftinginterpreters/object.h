@@ -1,17 +1,26 @@
 #ifndef clox_object_h
 #define clox_object_h
 
+#include "chunk.h"
 #include "common.h"
 #include "value.h"
 
 typedef enum {
   OBJ_STRING,
+  OBJ_FUNCTION,
 } ObjType;
 
 struct Obj {
   ObjType type_;
   struct Obj *next_;
 };
+
+typedef struct {
+  Obj base_;
+  int arity_;
+  Chunk chunk_;
+  ObjString *name_;  // function name, global has no name field
+} ObjFunction;
 
 struct ObjString {
   Obj base_;
@@ -33,5 +42,6 @@ static inline bool isObjType(Value v, ObjType expect) {
 
 ObjString *copyString(const char *start, int len);
 ObjString *takeString(char *chars, int len);
+ObjFunction *newFuction();
 
 #endif
