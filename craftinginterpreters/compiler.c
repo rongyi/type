@@ -46,7 +46,16 @@ typedef struct {
   int depth_;
 } Local;
 
-typedef struct {
+// indicate function is global or local
+typedef enum {
+  TYPE_FUNCTION,
+  TYPE_SCRIPT,
+} FunctionType;
+
+typedef struct Compiler {
+  struct Compiler *enclosing_;  // outlayer compiler
+  ObjFunction *function_;
+  FunctionType fun_type_;
   // locals_ save variable name
   Local locals_[UINT8_COUNT];
   int local_count_;
@@ -54,9 +63,8 @@ typedef struct {
 } Compiler;
 
 Parser parser;
-Compiler *currentCompiler;
-Chunk *compilingChunk;
-static Chunk *currentChunk() { return compilingChunk; }
+Compiler *currentCompiler = NULL;
+static Chunk *currentChunk() { return &currentCompiler->function_->chunk_; }
 
 static void expression();
 static PraseRule *getRule(TokenType t);
@@ -69,11 +77,30 @@ static bool match(TokenType type);
 static int emitJump(OpCode code);
 static void patchJump(int jump_pos);
 static void varDeclaration();
+static bool check(TokenType type);
 
-static void initCompiler(Compiler *c) {
+static void initCompiler(Compiler *c, FunctionType type) {
+  c->enclosing_ = currentCompiler;
+  c->function_ = NULL;
+  c->fun_type_ = type;
   c->local_count_ = 0;
   c->scope_depth_ = 0;
+
+  c->function_ = newFuction();
+
   currentCompiler = c;
+  // need a name
+  if (type != TYPE_SCRIPT) {
+    currentCompiler->function_->name_ =
+        copyString(parser.previous_.start_, parser.previous_.length_);
+  }
+
+  // why?
+  // to take the first index as function name
+  Local *local = &currentCompiler->locals_[currentCompiler->local_count_++];
+  local->depth_ = 0;
+  local->name_.start_ = "";
+  local->name_.length_ = 0;
 }
 
 static void errorAt(Token *token, const char *message) {
@@ -123,15 +150,24 @@ static void consume(TokenType type, const char *message) {
 static void emitByte(uint8_t byte) {
   writeChunk(currentChunk(), byte, parser.previous_.line_);
 }
-static void emitReturn() { emitByte(OP_RETURN); }
 
-static void endCompiler() {
+static void emitReturn() {
+  emitByte(OP_NIL);
+  emitByte(OP_RETURN);
+}
+
+static ObjFunction *endCompiler() {
   emitReturn();
+  ObjFunction *ret = currentCompiler->function_;
 #ifdef DEBUG_PRINT_CODE
   if (!parser.hadError_) {
-    disassembleChunk(currentChunk(), "code");
+    disassembleChunk(currentChunk(),
+                     ret->name_ != NULL ? ret->name_->chars_ : "<script>");
   }
 #endif
+  // base line
+  currentCompiler = currentCompiler->enclosing_;
+  return ret;
 }
 static void emitBytes(uint8_t b1, uint8_t b2) {
   emitByte(b1);
@@ -274,8 +310,28 @@ static void or_(bool can_assign) {
   patchJump(end_jump);
 }
 
+static uint8_t argumentList() {
+  uint8_t arg_cnt = 0;
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    do {
+      expression();
+      if (arg_cnt == 255) {
+        error("Can't have more than 255 arguments.");
+      }
+      arg_cnt++;
+    } while (match(TOKEN_COMMA));
+  }
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+  return arg_cnt;
+}
+
+static void call(bool can_assign) {
+  uint8_t arg_cnt = argumentList();
+  emitBytes(OP_CALL, arg_cnt);
+}
+
 PraseRule rules[] = {
-    [TOKEN_LEFT_PAREN] = {grouping, NULL, PREC_NONE},
+    [TOKEN_LEFT_PAREN] = {grouping, call, PREC_CALL},
     [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
     [TOKEN_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
     [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
@@ -508,6 +564,19 @@ static void forStatement() {
   endScope();
 }
 
+static void returnStatement() {
+  if (currentCompiler->fun_type_ == TYPE_SCRIPT) {
+    error("Can't return from top level code.");
+  }
+  if (match(TOKEN_SEMICOLON)) {
+    emitReturn();
+  } else {
+    expression();
+    consume(TOKEN_SEMICOLON, "Expect ';' after return value.");
+    emitByte(OP_RETURN);
+  }
+}
+
 // Every bytecode instruction has a stack effect that describes how the
 // instruction modifies the stack. For example, OP_ADD pops two values and
 // pushes one, leaving the stack one element smaller than before.
@@ -520,6 +589,8 @@ static void statement() {
     printStatement();
   } else if (match(TOKEN_IF)) {
     ifStatement();
+  } else if (match(TOKEN_RETURN)) {
+    returnStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
     block();
@@ -615,6 +686,9 @@ static uint8_t parseVariable(const char *errorMessage) {
 }
 
 static void markInitialized() {
+  if (currentCompiler->scope_depth_ == 0) {
+    return;
+  }
   currentCompiler->locals_[currentCompiler->local_count_ - 1].depth_ =
       currentCompiler->scope_depth_;
 }
@@ -686,9 +760,47 @@ static void variable(bool can_assign) {
   namedVariable(parser.previous_, can_assign);
 }
 
+static void function(FunctionType type) {
+  Compiler c;
+  initCompiler(&c, type);
+  beginScope();
+
+  // no function args yet
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    // so you understand do while?
+    // function args
+    do {
+      currentCompiler->function_->arity_++;  // arguments
+      if (currentCompiler->function_->arity_ > 255) {
+        errorAtCurrent("Can't have more than 255 parameters.");
+      }
+      uint8_t idx = parseVariable("Expect parameter name.");
+      defineVariable(idx);
+
+    } while (match(TOKEN_COMMA));
+  }
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
+  consume(TOKEN_LEFT_BRACE, "Expect '{' before function body");
+
+  block();
+
+  ObjFunction *ret = endCompiler();
+  emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(ret)));
+}
+
+static void funDeclaration() {
+  uint8_t idx = parseVariable("Expect function name.");
+  markInitialized();
+  function(TYPE_FUNCTION);
+  defineVariable(idx);
+}
+
 static void declaration() {
   if (match(TOKEN_VAR)) {
     varDeclaration();
+  } else if (match(TOKEN_FUN)) {
+    funDeclaration();
   } else {
     statement();
   }
@@ -697,12 +809,10 @@ static void declaration() {
   }
 }
 
-bool compile(const char *source, Chunk *c) {
+ObjFunction *compile(const char *source) {
   initScanner(source);
   Compiler compiler;
-  initCompiler(&compiler);
-
-  compilingChunk = c;
+  initCompiler(&compiler, TYPE_SCRIPT);
 
   parser.panicMode_ = false;
   parser.hadError_ = false;
@@ -713,7 +823,7 @@ bool compile(const char *source, Chunk *c) {
     declaration();
   }
   consume(TOKEN_EOF, "expect end of expression");
-  endCompiler();
+  ObjFunction *ret = endCompiler();
 
   // for testing scanner
 #if 0
@@ -733,5 +843,9 @@ bool compile(const char *source, Chunk *c) {
   }
 #endif
 
-  return !parser.hadError_;
+  if (parser.hadError_) {
+    return NULL;
+  }
+
+  return ret;
 }

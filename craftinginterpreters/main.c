@@ -62,9 +62,10 @@ static void runFile(const char *path) {
 // new for compiler
 int main(int argc, const char *argv[]) {
   initVM();
-  /*interpret("var a = 10;");*/
+  /*interpret("{var a = 10;}");*/
   /*interpret("var b = 10;");*/
   /*interpret("a + b = 10;");*/
+  /*interpret("fun sum(a, b, c) { return a + b + c;}");*/
 
 #if 1
   if (argc == 1) {

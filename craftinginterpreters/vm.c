@@ -13,7 +13,10 @@
 
 VM vm;
 
-static void resetStack() { vm.stack_top_ = vm.stack_; }
+static void resetStack() {
+  vm.stack_top_ = vm.stack_;
+  vm.frame_count_ = 0;
+}
 
 void initVM() {
   resetStack();
@@ -30,12 +33,14 @@ void freeVM() {
 
 Value readConstantLong() {
   // ip already at operand position
-  int vidx = (vm.chunk_->code[vm.ip_ - vm.chunk_->code + 2] << 16) |
-             (vm.chunk_->code[vm.ip_ - vm.chunk_->code + 1] << 8) |
-             (vm.chunk_->code[vm.ip_ - vm.chunk_->code + 0]);
-  vm.ip_ += 3;
+  CallFrame *frame = &vm.frames_[vm.frame_count_ - 1];
+  Chunk *chunk = &frame->function_->chunk_;
+  int vidx = (chunk->code[frame->ip_ - chunk->code + 2] << 16) |
+             (chunk->code[frame->ip_ - chunk->code + 1] << 8) |
+             (chunk->code[frame->ip_ - chunk->code + 0]);
+  frame->ip_ += 3;
 
-  return vm.chunk_->constants.values[vidx];
+  return chunk->constants.values[vidx];
 }
 static Value peek(int distance) { return vm.stack_top_[-1 - distance]; }
 static void runtimeError(const char *format, ...) {
@@ -45,9 +50,19 @@ static void runtimeError(const char *format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  size_t instruction = vm.ip_ - vm.chunk_->code - 1;
-  int line = vm.chunk_->lines[instruction];
-  fprintf(stderr, "[line %d] in script\n", line);
+  for (int i = vm.frame_count_ - 1; i >= 0; i--) {
+    CallFrame *frame = &vm.frames_[i];
+    ObjFunction *f = frame->function_;
+    size_t instruction = frame->ip_ - f->chunk_.code - 1;
+    fprintf(stderr, "[line %d] in ", f->chunk_.lines[instruction]);
+
+    if (f->name_ == NULL) {
+      fprintf(stderr, "script\n");
+    } else {
+      fprintf(stderr, "%s()\n", f->name_->chars_);
+    }
+  }
+
   resetStack();
 }
 
@@ -67,11 +82,47 @@ static void concatenate() {
   push(OBJ_VAL(ret));
 }
 
+static bool call(ObjFunction *f, int arg_cnt) {
+  if (arg_cnt != f->arity_) {
+    runtimeError("Expect %d arguments but got %d.", f->arity_, arg_cnt);
+    return false;
+  }
+  if (vm.frame_count_ == FRAMES_MAX) {
+    runtimeError("Stack overflow.");
+    return false;
+  }
+
+  CallFrame *frame = &vm.frames_[vm.frame_count_++];
+  frame->function_ = f;
+  frame->ip_ = f->chunk_.code;
+  frame->slots_ = vm.stack_top_ - arg_cnt - 1;
+
+  return true;
+}
+
+static bool callValue(Value callee, int arg_cnt) {
+  if (IS_OBJ(callee)) {
+    switch (OBJ_TYPE(callee)) {
+      case OBJ_FUNCTION:
+        return call(AS_FUNCTION(callee), arg_cnt);
+      default:
+        // fall as error
+        break;
+    }
+  }
+  runtimeError("Can only call functions and clauses.");
+  return false;
+}
+
 static InterpretResult run() {
-#define READ_BYTE() (*vm.ip_++)
-#define READ_CONSTANT() (vm.chunk_->constants.values[READ_BYTE()])
+  // the last frame
+  CallFrame *frame = &vm.frames_[vm.frame_count_ - 1];
+
+#define READ_BYTE() (*frame->ip_++)
+#define READ_CONSTANT() (frame->function_->chunk_.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
-#define READ_SHORT() (vm.ip_ += 2, (uint16_t)((vm.ip_[-1] << 8) | (vm.ip_[-2])))
+#define READ_SHORT() \
+  (frame->ip_ += 2, (uint16_t)((frame->ip_[-1] << 8) | (frame->ip_[-2])))
 #define BINARY_OP(valuetype, op)                      \
   do {                                                \
     if (!IS_NUMBER(peek(0)) && !IS_NUMBER(peek(1))) { \
@@ -93,7 +144,8 @@ static InterpretResult run() {
       printf(" ]");
     }
     printf("\n");
-    disassembleInstruction(vm.chunk_, (int)(vm.ip_ - vm.chunk_->code));
+    disassembleInstruction(&frame->function_->chunk_,
+                           (int)(frame->ip_ - frame->function_->chunk_.code));
 #endif
     uint8_t instruction = READ_BYTE();
     switch (instruction) {
@@ -145,14 +197,15 @@ static InterpretResult run() {
       }
       case OP_GET_LOCAL: {
         uint8_t slot = READ_BYTE();
-        push(vm.stack_[slot]);
+        push(frame->slots_[slot]);
         break;
       }
       case OP_SET_LOCAL: {
         uint8_t slot = READ_BYTE();
         // name are just for index, they don't have name to search
         // just the idx
-        vm.stack_[slot] = peek(0);
+        /*vm.stack_[slot] = peek(0);*/
+        frame->slots_[slot] = peek(0);
         /* Note that it doesn’t pop the value from the stack. Remember,
          * assignment is an expression, and every expression produces a value.
          * The value of an assignment expression is the assigned value itself,
@@ -224,18 +277,31 @@ static InterpretResult run() {
       case OP_JUMP_IF_FALSE: {
         uint16_t offset = READ_SHORT();
         if (isFalsey(peek(0))) {
-          vm.ip_ += offset;
+          /*vm.ip_ += offset;*/
+          frame->ip_ += offset;
         }
         break;
       }
       case OP_JUMP: {
         uint16_t offset = READ_SHORT();
-        vm.ip_ += offset;
+        /*vm.ip_ += offset;*/
+        frame->ip_ += offset;
         break;
       }
       case OP_LOOP: {
         uint16_t back = READ_SHORT();
-        vm.ip_ -= back;
+        /*vm.ip_ -= back;*/
+        frame->ip_ -= back;
+        break;
+      }
+
+      case OP_CALL: {
+        int arg_cnt = READ_BYTE();
+        if (!callValue(peek(arg_cnt), arg_cnt)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        // after evaluation
+        frame = &vm.frames_[vm.frame_count_ - 1];
         break;
       }
 
@@ -243,7 +309,17 @@ static InterpretResult run() {
         // goodbye, return, we have print now
         /*printValue(pop());*/
         /*printf("\n");*/
-        return INTERPRET_OK;
+        Value ret = pop();
+        vm.frame_count_--;
+        if (vm.frame_count_ == 0) {
+          // the script
+          pop();
+          return INTERPRET_OK;
+        }
+        vm.stack_top_ = frame->slots_;
+        push(ret);
+        frame = &vm.frames_[vm.frame_count_ - 1];
+        break;
       }
     }
   }
@@ -255,6 +331,8 @@ static InterpretResult run() {
 }
 
 InterpretResult interpret(const char *source) {
+// legacy code
+#if 0
   Chunk c;
   initChunk(&c);
   if (!compile(source, &c)) {
@@ -263,11 +341,21 @@ InterpretResult interpret(const char *source) {
   }
   vm.chunk_ = &c;
   vm.ip_ = vm.chunk_->code;
+#endif
+  ObjFunction *f = compile(source);
+  if (f == NULL) {
+    return INTERPRET_COMPILE_ERROR;
+  }
+  push(OBJ_VAL(f));
+  call(f, 0);
 
-  InterpretResult ret = run();
-  freeChunk(&c);
+  // a new frame
+  CallFrame *frame = &vm.frames_[vm.frame_count_++];
+  frame->function_ = f;
+  frame->ip_ = f->chunk_.code;
+  frame->slots_ = vm.stack_;  // this line mark the base pointer
 
-  return ret;
+  return run();
 }
 
 #if 0

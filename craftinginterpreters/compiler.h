@@ -2,6 +2,6 @@
 #define compiler_clox_h
 #include "vm.h"
 
-bool compile(const char *source, Chunk *c);
+ObjFunction *compile(const char *source);
 
 #endif

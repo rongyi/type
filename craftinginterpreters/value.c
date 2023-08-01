@@ -50,6 +50,10 @@ void printValue(Value v) {
 }
 
 static void printFunction(ObjFunction *f) {
+  if (f->name_ == NULL) {
+    printf("script\n");
+    return;
+  }
   printf("<fn %s>", f->name_->chars_);
 }
 
