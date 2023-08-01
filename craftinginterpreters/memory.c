@@ -29,6 +29,12 @@ static void freeObject(Obj *o) {
       FREE(ObjString, o);
       break;
     }
+    case OBJ_FUNCTION: {
+      ObjFunction *f = (ObjFunction *)o;
+      freeChunk(&f->chunk_);
+      FREE(ObjFunction, o);
+      break;
+    }
     default: {
       /*printf("what the fuck! %d\n", o->type_);*/
     }
