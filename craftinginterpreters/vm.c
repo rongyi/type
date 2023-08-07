@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "common.h"
 #include "compiler.h"
@@ -12,6 +13,18 @@
 #include "value.h"
 
 VM vm;
+
+static Value clockNative(int arg_cnt, Value *args) {
+  return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
+
+static void defineNative(const char *name, NativeFn f) {
+  push(OBJ_VAL(copyString(name, (int)strlen(name))));
+  push(OBJ_VAL(newNative(f)));
+  tableSet(&vm.globals_, AS_STRING(vm.stack_[0]), vm.stack_[1]);
+  pop();
+  pop();
+}
 
 static void resetStack() {
   vm.stack_top_ = vm.stack_;
@@ -23,6 +36,8 @@ void initVM() {
   vm.objects_head_ = NULL;
   initTable(&vm.string_set_);
   initTable(&vm.globals_);
+
+  defineNative("clock", clockNative);
 }
 
 void freeVM() {
@@ -105,6 +120,14 @@ static bool callValue(Value callee, int arg_cnt) {
     switch (OBJ_TYPE(callee)) {
       case OBJ_FUNCTION:
         return call(AS_FUNCTION(callee), arg_cnt);
+      case OBJ_NATIVE: {
+        NativeFn native = AS_NATIVE(callee);
+        Value ret = native(arg_cnt, vm.stack_top_ - arg_cnt);
+        vm.stack_top_ -= arg_cnt + 1;
+        push(ret);
+        return true;
+      }
+
       default:
         // fall as error
         break;

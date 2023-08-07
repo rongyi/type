@@ -81,3 +81,10 @@ ObjFunction *newFuction() {
   return ret;
 }
 
+ObjNative *newNative(NativeFn f) {
+  ObjNative *native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
+  native->function_ = f;
+
+  return native;
+}
+

@@ -35,6 +35,10 @@ static void freeObject(Obj *o) {
       FREE(ObjFunction, o);
       break;
     }
+    case OBJ_NATIVE: {
+      FREE(ObjNative, o);
+      break;
+    }
     default: {
       /*printf("what the fuck! %d\n", o->type_);*/
     }

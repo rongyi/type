@@ -65,6 +65,9 @@ void printObject(Value v) {
     case OBJ_FUNCTION:
       printFunction(AS_FUNCTION(v));
       break;
+    case OBJ_NATIVE:
+      printf("<native fn>");
+      break;
   }
 }
 
