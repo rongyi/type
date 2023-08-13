@@ -20,6 +20,7 @@ struct Obj {
 typedef struct {
   Obj base_;
   int arity_;
+  int upvalue_cnt_;
   Chunk chunk_;
   ObjString *name_;  // function name, global has no name field
 } ObjFunction;

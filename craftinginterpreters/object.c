@@ -75,6 +75,7 @@ ObjString *takeString(char *chars, int len) {
 ObjFunction *newFuction() {
   ObjFunction *ret = ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
   ret->arity_ = 0;
+  ret->upvalue_cnt_ = 0;
   ret->name_ = NULL;
   initChunk(&ret->chunk_);  // the code address
 

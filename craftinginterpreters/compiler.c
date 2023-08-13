@@ -46,6 +46,11 @@ typedef struct {
   int depth_;
 } Local;
 
+typedef struct {
+  uint8_t index_;
+  bool is_local_;
+} Upvalue;
+
 // indicate function is global or local
 typedef enum {
   TYPE_FUNCTION,
@@ -59,6 +64,7 @@ typedef struct Compiler {
   // locals_ save variable name
   Local locals_[UINT8_COUNT];
   int local_count_;
+  Upvalue upvalues_[UINT8_COUNT];
   int scope_depth_;
 } Compiler;
 
@@ -734,6 +740,39 @@ static int resolveLocal(Compiler *c, Token *name) {
   return -1;
 }
 
+static int addUpvalue(Compiler *c, uint8_t idx, bool is_local) {
+  int upvalue_cnt = c->function_->upvalue_cnt_;
+  // already resolved?
+  // O(n) search
+  for (int i = 0; i < upvalue_cnt; i++) {
+    Upvalue *curup = &c->upvalues_[i];
+    if (curup->index_ == idx && curup->is_local_ == is_local) {
+      return i;
+    }
+  }
+  if (upvalue_cnt == UINT8_COUNT) {
+    error("Too many closure variable in function");
+    return 0;
+  }
+
+  c->upvalues_[upvalue_cnt].is_local_ = is_local;
+  c->upvalues_[upvalue_cnt].index_ = idx;
+
+  return c->function_->upvalue_cnt_++;
+}
+
+static int resolveUpvalue(Compiler *c, Token *name) {
+  if (c->enclosing_ == NULL) {
+    return -1;
+  }
+  int local = resolveLocal(c->enclosing_, name);
+  if (local != -1) {
+    return addUpvalue(c, (uint8_t)local, true);
+  }
+
+  return -1;
+}
+
 static void namedVariable(Token name, bool can_assign) {
   uint8_t get_op;
   uint8_t set_op;
@@ -741,6 +780,9 @@ static void namedVariable(Token name, bool can_assign) {
   if (idx != -1) {
     get_op = OP_GET_LOCAL;
     set_op = OP_SET_LOCAL;
+  } else if ((idx = resolveUpvalue(currentCompiler, &name)) != -1) {
+    get_op = OP_GET_UPVALUE;
+    set_op = OP_SET_UPVALUE;
   } else {
     idx = identifierConstant(&name);
     get_op = OP_GET_GLOBAL;
