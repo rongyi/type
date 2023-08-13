@@ -30,6 +30,7 @@ typedef enum {
   OP_NEGATE,  // no operand, other instruction push to stack
   OP_PRINT,
   OP_CALL,
+  OP_CLOSURE,
   OP_RETURN,
 } OpCode;
 

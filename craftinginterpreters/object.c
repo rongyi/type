@@ -25,7 +25,7 @@ static Obj *allocateObjectWithType(size_t size, ObjType type) {
 }
 
 static ObjString *allocateString(char *chars, int len, uint32_t hash) {
-  printf("allocateString\n");
+  /*printf("allocateString\n");*/
   ObjString *ret = ALLOCATE_OBJ(ObjString, OBJ_STRING);
   ret->length_ = len;
   ret->chars_ = chars;
@@ -86,5 +86,11 @@ ObjNative *newNative(NativeFn f) {
   native->function_ = f;
 
   return native;
+}
+
+ObjClosure *newClosure(ObjFunction *f) {
+  ObjClosure *ret = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
+  ret->function_ = f;
+  return ret;
 }
 

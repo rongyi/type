@@ -49,7 +49,7 @@ void freeVM() {
 Value readConstantLong() {
   // ip already at operand position
   CallFrame *frame = &vm.frames_[vm.frame_count_ - 1];
-  Chunk *chunk = &frame->function_->chunk_;
+  Chunk *chunk = &frame->closure_->function_->chunk_;
   int vidx = (chunk->code[frame->ip_ - chunk->code + 2] << 16) |
              (chunk->code[frame->ip_ - chunk->code + 1] << 8) |
              (chunk->code[frame->ip_ - chunk->code + 0]);
@@ -67,7 +67,7 @@ static void runtimeError(const char *format, ...) {
 
   for (int i = vm.frame_count_ - 1; i >= 0; i--) {
     CallFrame *frame = &vm.frames_[i];
-    ObjFunction *f = frame->function_;
+    ObjFunction *f = frame->closure_->function_;
     size_t instruction = frame->ip_ - f->chunk_.code - 1;
     fprintf(stderr, "[line %d] in ", f->chunk_.lines[instruction]);
 
@@ -97,9 +97,10 @@ static void concatenate() {
   push(OBJ_VAL(ret));
 }
 
-static bool call(ObjFunction *f, int arg_cnt) {
-  if (arg_cnt != f->arity_) {
-    runtimeError("Expect %d arguments but got %d.", f->arity_, arg_cnt);
+static bool call(ObjClosure *closure, int arg_cnt) {
+  if (arg_cnt != closure->function_->arity_) {
+    runtimeError("Expect %d arguments but got %d.", closure->function_->arity_,
+                 arg_cnt);
     return false;
   }
   if (vm.frame_count_ == FRAMES_MAX) {
@@ -108,8 +109,8 @@ static bool call(ObjFunction *f, int arg_cnt) {
   }
 
   CallFrame *frame = &vm.frames_[vm.frame_count_++];
-  frame->function_ = f;
-  frame->ip_ = f->chunk_.code;
+  frame->closure_ = closure;
+  frame->ip_ = closure->function_->chunk_.code;
   frame->slots_ = vm.stack_top_ - arg_cnt - 1;
 
   return true;
@@ -118,8 +119,8 @@ static bool call(ObjFunction *f, int arg_cnt) {
 static bool callValue(Value callee, int arg_cnt) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
-      case OBJ_FUNCTION:
-        return call(AS_FUNCTION(callee), arg_cnt);
+      case OBJ_CLOSURE:
+        return call(AS_CLOSURE(callee), arg_cnt);
       case OBJ_NATIVE: {
         NativeFn native = AS_NATIVE(callee);
         Value ret = native(arg_cnt, vm.stack_top_ - arg_cnt);
@@ -142,7 +143,8 @@ static InterpretResult run() {
   CallFrame *frame = &vm.frames_[vm.frame_count_ - 1];
 
 #define READ_BYTE() (*frame->ip_++)
-#define READ_CONSTANT() (frame->function_->chunk_.constants.values[READ_BYTE()])
+#define READ_CONSTANT() \
+  (frame->closure_->function_->chunk_.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define READ_SHORT() \
   (frame->ip_ += 2, (uint16_t)((frame->ip_[-1] << 8) | (frame->ip_[-2])))
@@ -327,6 +329,12 @@ static InterpretResult run() {
         frame = &vm.frames_[vm.frame_count_ - 1];
         break;
       }
+      case OP_CLOSURE: {
+        ObjFunction *f = AS_FUNCTION(READ_CONSTANT());
+        ObjClosure *closure = newClosure(f);
+        push(OBJ_VAL(closure));
+        break;
+      }
 
       case OP_RETURN: {
         // goodbye, return, we have print now
@@ -370,13 +378,16 @@ InterpretResult interpret(const char *source) {
     return INTERPRET_COMPILE_ERROR;
   }
   push(OBJ_VAL(f));
-  call(f, 0);
+  ObjClosure *closure = newClosure(f);
+  pop();
+  push(OBJ_VAL(closure));
+  call(closure, 0);
 
   // a new frame
-  CallFrame *frame = &vm.frames_[vm.frame_count_++];
-  frame->function_ = f;
-  frame->ip_ = f->chunk_.code;
-  frame->slots_ = vm.stack_;  // this line mark the base pointer
+  /*CallFrame *frame = &vm.frames_[vm.frame_count_++];*/
+  /*frame->closure_->function_ = f;*/
+  /*frame->ip_ = f->chunk_.code;*/
+  /*frame->slots_ = vm.stack_;  // this line mark the base pointer*/
 
   return run();
 }
