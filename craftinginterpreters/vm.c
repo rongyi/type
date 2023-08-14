@@ -353,6 +353,16 @@ static InterpretResult run() {
           uint8_t is_local = READ_BYTE();
           uint8_t index = READ_BYTE();
           if (is_local) {
+            // An OP_CLOSURE instruction is emitted at the end of a function
+            // declaration. At the moment that we are executing that
+            // declaration, the current function is the surrounding one. That
+            // means the current function’s closure is stored in the CallFrame
+            // at the top of the callstack. So, to grab an upvalue from the
+            // enclosing function, we can read it right from the frame local
+            // variable, which caches a reference to that CallFrame.
+            //
+            // closure is emitted *after* endCompiler
+            // so current frame is the enclosing one of this closure function
             closure->upvalues_[i] = captureUpvalue(frame->slots_ + index);
           } else {
             closure->upvalues_[i] = frame->closure_->upvalues_[index];
