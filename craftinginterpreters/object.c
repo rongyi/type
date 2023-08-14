@@ -90,8 +90,23 @@ ObjNative *newNative(NativeFn f) {
 }
 
 ObjClosure *newClosure(ObjFunction *f) {
+  ObjUpvalue **upvalues = ALLOCATE(ObjUpvalue *, f->upvalue_cnt_);
+  for (int i = 0; i < f->upvalue_cnt_; i++) {
+    upvalues[i] = NULL;
+  }
+
   ObjClosure *ret = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
   ret->function_ = f;
+  ret->upvalues_ = upvalues;
+  // cache to here
+  ret->upvalue_cnt_ = f->upvalue_cnt_;
+
   return ret;
 }
 
+ObjUpvalue *newUpvalue(Value *slot) {
+  ObjUpvalue *upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
+  upvalue->location_ = slot;
+
+  return upvalue;
+}

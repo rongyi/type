@@ -10,6 +10,7 @@ typedef enum {
   OBJ_FUNCTION,
   OBJ_NATIVE,
   OBJ_CLOSURE,
+  OBJ_UPVALUE,
 } ObjType;
 
 struct Obj {
@@ -25,9 +26,16 @@ typedef struct {
   ObjString *name_;  // function name, global has no name field
 } ObjFunction;
 
+typedef struct ObjUpvalue {
+  Obj base_;
+  Value *location_;
+} ObjUpvalue;
+
 typedef struct {
   Obj base_;
   ObjFunction *function_;
+  ObjUpvalue **upvalues_;  // array
+  int upvalue_cnt_;
 } ObjClosure;
 
 struct ObjString {
@@ -67,5 +75,6 @@ ObjString *takeString(char *chars, int len);
 ObjFunction *newFuction();
 ObjNative *newNative(NativeFn f);
 ObjClosure *newClosure(ObjFunction *f);
+ObjUpvalue *newUpvalue(Value *slot);
 
 #endif

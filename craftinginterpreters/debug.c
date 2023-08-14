@@ -1,5 +1,6 @@
 #include "debug.h"
 
+#include "object.h"
 #include "stdio.h"
 #include "value.h"
 
@@ -94,6 +95,10 @@ int disassembleInstruction(Chunk *c, int offset) {
       return byteInstruction("OP_GET_LOCAL", c, offset);
     case OP_SET_LOCAL:
       return byteInstruction("OP_SET_LOCAL", c, offset);
+    case OP_GET_UPVALUE:
+      return byteInstruction("OP_GET_UPVALUE", c, offset);
+    case OP_SET_UPVALUE:
+      return byteInstruction("OP_SET_UPVALUE", c, offset);
     case OP_JUMP_IF_FALSE:
       return jumpInstruction("OP_JUMP_IF_FALSE", 1, c, offset);
     case OP_JUMP:
@@ -108,6 +113,16 @@ int disassembleInstruction(Chunk *c, int offset) {
       printf("%-16s %4d ", "OP_CLOSURE", idx);
       printValue(c->constants.values[idx]);
       printf("\n");
+
+      // still a function in stack
+      ObjFunction *f = AS_FUNCTION(c->constants.values[idx]);
+      for (int j = 0; j < f->upvalue_cnt_; j++) {
+        int is_local = c->code[offset++];
+        int index = c->code[offset++];
+        printf("%04d      |                     %s %d\n", offset - 2,
+               is_local ? "local" : "upvalue", index);
+      }
+
       return offset;
     }
     default:

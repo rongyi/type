@@ -71,6 +71,9 @@ void printObject(Value v) {
     case OBJ_CLOSURE:
       printFunction(AS_CLOSURE(v)->function_);
       break;
+    case OBJ_UPVALUE:
+      printf("upvalue");
+      break;
   }
 }
 

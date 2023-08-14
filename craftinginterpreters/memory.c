@@ -40,7 +40,15 @@ static void freeObject(Obj *o) {
       break;
     }
     case OBJ_CLOSURE: {
+      // free upvalues array
+      ObjClosure *closure = (ObjClosure *)o;
+      FREE_ARRAY(ObjUpvalue *, closure->upvalues_, closure->upvalue_cnt_);
+
       FREE(ObjClosure, o);
+      break;
+    }
+    case OBJ_UPVALUE: {
+      FREE(ObjUpvalue, o);
       break;
     }
     default: {
