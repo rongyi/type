@@ -251,6 +251,16 @@ static InterpretResult run() {
         pop();
         break;
       }
+      case OP_GET_UPVALUE: {
+        uint8_t slot = READ_BYTE();
+        push(*frame->closure_->upvalues_[slot]->location_);
+        break;
+      }
+      case OP_SET_UPVALUE: {
+        uint8_t slot = READ_BYTE();
+        *frame->closure_->upvalues_[slot]->location_ = peek(0);
+        break;
+      }
       case OP_EQUAL: {
         Value b = pop();
         Value a = pop();
