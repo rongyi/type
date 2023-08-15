@@ -361,8 +361,10 @@ static InterpretResult run() {
             // enclosing function, we can read it right from the frame local
             // variable, which caches a reference to that CallFrame.
             //
-            // closure is emitted *after* endCompiler
-            // so current frame is the enclosing one of this closure function
+            // only call can affect the frame shrink or expand
+            // OP_CLOSURE is to get this function and push to stack
+            // but no call yet, so there's no frame incresing
+            // so the top frame is the enclosing one
             closure->upvalues_[i] = captureUpvalue(frame->slots_ + index);
           } else {
             closure->upvalues_[i] = frame->closure_->upvalues_[index];
