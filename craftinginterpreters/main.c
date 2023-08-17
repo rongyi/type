@@ -68,7 +68,7 @@ int main(int argc, const char *argv[]) {
   /*interpret("fun sum(a, b, c) { return a + b + c;}");*/
 
 #if 1
-  If (argc == 1) {
+  if (argc == 1) {
     repl();
   } else if (argc == 2) {
     runFile(argv[1]);

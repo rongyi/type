@@ -29,6 +29,7 @@ static void defineNative(const char *name, NativeFn f) {
 static void resetStack() {
   vm.stack_top_ = vm.stack_;
   vm.frame_count_ = 0;
+  vm.open_upvalues_ = NULL;
 }
 
 void initVM() {
@@ -139,9 +140,38 @@ static bool callValue(Value callee, int arg_cnt) {
 }
 
 static ObjUpvalue *captureUpvalue(Value *local) {
+  // a cache
+  ObjUpvalue *prev = NULL;
+  ObjUpvalue *cur = vm.open_upvalues_;
+  // address compare?
+  while (cur != NULL && cur->location_ > local) {
+    prev = cur;
+    cur = cur->next_;
+  }
+  if (cur != NULL && cur->location_ == local) {
+    return cur;
+  }
+
   ObjUpvalue *created_upvalue = newUpvalue(local);
+  // cur      <-  created_upvalue  <- prev(maybe NULL)
+  created_upvalue->next_ = cur;
+
+  if (prev == NULL) {
+    vm.open_upvalues_ = created_upvalue;
+  } else {
+    prev->next_ = created_upvalue;
+  }
 
   return created_upvalue;
+}
+
+static void closeUpvalues(Value *last) {
+  while (vm.open_upvalues_ != NULL && vm.open_upvalues_->location_ >= last) {
+    ObjUpvalue *cur = vm.open_upvalues_;
+    cur->closed_ = *cur->location_;
+    cur->location_ = &cur->closed_;
+    vm.open_upvalues_ = cur->next_;
+  }
 }
 
 static InterpretResult run() {
@@ -373,11 +403,17 @@ static InterpretResult run() {
         break;
       }
 
+      case OP_CLOSE_UPVALUE: {
+        closeUpvalues(vm.stack_top_ - 1);
+        pop();
+        break;
+      }
       case OP_RETURN: {
         // goodbye, return, we have print now
         /*printValue(pop());*/
         /*printf("\n");*/
         Value ret = pop();
+        closeUpvalues(frame->slots_);
         vm.frame_count_--;
         if (vm.frame_count_ == 0) {
           // the script

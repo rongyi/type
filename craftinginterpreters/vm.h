@@ -27,6 +27,7 @@ typedef struct {
   // point ot next place to write!
   Value *stack_top_;
   Obj *objects_head_;
+  ObjUpvalue *open_upvalues_;
   Table string_set_;
   Table globals_;
 } VM;

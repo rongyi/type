@@ -29,6 +29,8 @@ typedef struct {
 typedef struct ObjUpvalue {
   Obj base_;
   Value *location_;
+  Value closed_;
+  struct ObjUpvalue *next_;
 } ObjUpvalue;
 
 typedef struct {
