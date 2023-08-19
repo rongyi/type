@@ -398,6 +398,7 @@ fn is_alpha(c: u8) -> bool {
     (c >= b'a' && c <= b'z') || (c >= b'A' && c <= b'Z') || c == b'_'
 }
 
+#[derive(Copy, Clone)]
 enum Precedence {
     None,
     Assignment, // =
@@ -475,140 +476,80 @@ impl<'a> Parser<'a> {
             line: 1,
         };
         let mut rules = HashMap::new();
-        rules.insert(
-            TokenType::LeftParen,
-            ParseRule::new(Some(Parser::grouping), None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::RightParen,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::LeftBrace,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::RightBrace,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::Comma,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(TokenType::Dot, ParseRule::new(None, None, Precedence::None));
-        rules.insert(
-            TokenType::Minus,
-            ParseRule::new(Some(Parser::unary), Some(Parser::binary), Precedence::Term),
-        );
+        let mut rule = |kind, prefix, infix, precedence| {
+            rules.insert(kind, ParseRule::new(prefix, infix, precedence));
+        };
 
-        rules.insert(
+        rule(
+            TokenType::LeftParen,
+            Some(Parser::grouping),
+            None,
+            Precedence::None,
+        );
+        rule(TokenType::RightParen, None, None, Precedence::None);
+        rule(TokenType::LeftBrace, None, None, Precedence::None);
+        rule(TokenType::RightBrace, None, None, Precedence::None);
+        rule(TokenType::Comma, None, None, Precedence::None);
+        rule(TokenType::Dot, None, None, Precedence::None);
+        rule(
+            TokenType::Minus,
+            Some(Parser::unary),
+            Some(Parser::binary),
+            Precedence::Term,
+        );
+        rule(
             TokenType::Plus,
-            ParseRule::new(None, Some(Parser::binary), Precedence::Term),
+            None,
+            Some(Parser::binary),
+            Precedence::Term,
         );
-        rules.insert(
-            TokenType::Semicolon,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
+        rule(TokenType::Semicolon, None, None, Precedence::None);
+        rule(
             TokenType::Slash,
-            ParseRule::new(None, Some(Parser::binary), Precedence::Factor),
+            None,
+            Some(Parser::binary),
+            Precedence::Factor,
         );
-        rules.insert(
+        rule(
             TokenType::Star,
-            ParseRule::new(None, Some(Parser::binary), Precedence::Factor),
+            None,
+            Some(Parser::binary),
+            Precedence::Factor,
         );
-        rules.insert(
-            TokenType::Bang,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::BangEqual,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::Equal,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::EqualEqual,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::Greater,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::GreaterEqual,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::Less,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::LessEqual,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::Identifier,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::String,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
+        rule(TokenType::Bang, None, None, Precedence::None);
+        rule(TokenType::BangEqual, None, None, Precedence::None);
+        rule(TokenType::Equal, None, None, Precedence::None);
+        rule(TokenType::EqualEqual, None, None, Precedence::None);
+        rule(TokenType::Greater, None, None, Precedence::None);
+        rule(TokenType::GreaterEqual, None, None, Precedence::None);
+        rule(TokenType::Less, None, None, Precedence::None);
+        rule(TokenType::LessEqual, None, None, Precedence::None);
+        rule(TokenType::Identifier, None, None, Precedence::None);
+        rule(TokenType::String, None, None, Precedence::None);
+        rule(
             TokenType::Number,
-            ParseRule::new(Some(Parser::number), None, Precedence::None),
+            Some(Parser::number),
+            None,
+            Precedence::None,
         );
-        rules.insert(TokenType::And, ParseRule::new(None, None, Precedence::None));
-        rules.insert(
-            TokenType::Class,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::Else,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::False,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(TokenType::For, ParseRule::new(None, None, Precedence::None));
-        rules.insert(TokenType::Fun, ParseRule::new(None, None, Precedence::None));
-        rules.insert(TokenType::If, ParseRule::new(None, None, Precedence::None));
-        rules.insert(TokenType::Nil, ParseRule::new(None, None, Precedence::None));
-        rules.insert(TokenType::Or, ParseRule::new(None, None, Precedence::None));
-        rules.insert(
-            TokenType::Print,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::Return,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::Super,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::This,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::True,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(TokenType::Var, ParseRule::new(None, None, Precedence::None));
-        rules.insert(
-            TokenType::While,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(
-            TokenType::Error,
-            ParseRule::new(None, None, Precedence::None),
-        );
-        rules.insert(TokenType::Eof, ParseRule::new(None, None, Precedence::None));
+        rule(TokenType::And, None, None, Precedence::None);
+        rule(TokenType::Class, None, None, Precedence::None);
+        rule(TokenType::Else, None, None, Precedence::None);
+        rule(TokenType::False, None, None, Precedence::None);
+        rule(TokenType::For, None, None, Precedence::None);
+        rule(TokenType::Fun, None, None, Precedence::None);
+        rule(TokenType::If, None, None, Precedence::None);
+        rule(TokenType::Nil, None, None, Precedence::None);
+        rule(TokenType::Or, None, None, Precedence::None);
+        rule(TokenType::Print, None, None, Precedence::None);
+        rule(TokenType::Return, None, None, Precedence::None);
+        rule(TokenType::Super, None, None, Precedence::None);
+        rule(TokenType::This, None, None, Precedence::None);
+        rule(TokenType::True, None, None, Precedence::None);
+        rule(TokenType::Var, None, None, Precedence::None);
+        rule(TokenType::While, None, None, Precedence::None);
+        rule(TokenType::Error, None, None, Precedence::None);
+        rule(TokenType::Eof, None, None, Precedence::None);
 
         Parser {
             scanner: Scanner::new(code),
@@ -626,6 +567,10 @@ impl<'a> Parser<'a> {
         self.expression();
         self.consume(TokenType::Eof, "Expect end of expression.");
         self.emit(Instruction::Return);
+
+        if DEBUG && !self.had_error {
+            self.chunk.disassemble("code");
+        }
 
         return self.had_error;
     }
@@ -657,9 +602,42 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn binary(&mut self) {}
+    fn binary(&mut self) {
+        let operator = self.previous.kind;
+        let rule = self.get_rule(operator);
+        self.parse_precedence(rule.precedence.next());
+        match operator {
+            TokenType::Plus => self.emit(Instruction::Add),
+            TokenType::Minus => self.emit(Instruction::Substract),
+            TokenType::Star => self.emit(Instruction::Multiply),
+            TokenType::Slash => self.emit(Instruction::Divide),
+            _ => panic!("Invalid unary operator"),
+        }
+    }
 
-    fn parse_precedence(&mut self, precedence: Precedence) {}
+    fn parse_precedence(&mut self, precedence: Precedence) {
+        self.advance();
+        let prefix_rule = self.get_rule(self.previous.kind).prefix;
+
+        let prefix_rule = match prefix_rule {
+            Some(rule) => rule,
+            None => {
+                self.error("Expect expression.");
+                return;
+            }
+        };
+        prefix_rule(self);
+        while self.is_lower_precedence(precedence) {
+            self.advance();
+            let infix_rule = self.get_rule(self.previous.kind).infix.unwrap();
+            infix_rule(self);
+        }
+    }
+
+    fn is_lower_precedence(&self, precedence: Precedence) -> bool {
+        let current_precedence = self.get_rule(self.current.kind).precedence;
+        (precedence as u8) <= (current_precedence as u8)
+    }
 
     fn consume(&mut self, expected: TokenType, msg: &str) {
         if self.current.kind == expected {
@@ -719,6 +697,10 @@ impl<'a> Parser<'a> {
         };
 
         self.emit(Instruction::Constant(index as usize));
+    }
+
+    fn get_rule(&self, kind: TokenType) -> &ParseRule<'a> {
+        self.rules.get(&kind).unwrap()
     }
 }
 
