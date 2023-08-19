@@ -1,4 +1,6 @@
 use std::env;
+use std::fs;
+use std::io::{self, Write};
 
 const DEBUG: bool = true;
 type Value = f64;
@@ -145,26 +147,42 @@ fn interpret(chunk: Chunk) -> InterpreResult {
     return vm.run();
 }
 
+fn run_code(code: &str) {
+    println!("Running {}", code);
+}
+
+fn repl() {
+    let mut line = String::new();
+    loop {
+        print!("> ");
+        io::stdout().flush().unwrap();
+        io::stdin()
+            .read_line(&mut line)
+            .expect("Unable to read line from the REPL");
+        if line.len() == 0 {
+            break;
+        }
+        run_code(&line);
+        line.clear();
+    }
+}
+
+fn run_file(path: &str) {
+    let code = match fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(err) => {
+            eprint!("Unable to read file {}: {}", path, err);
+            std::process::exit(1);
+        }
+    };
+    run_code(&code);
+}
+
 fn main() {
-    let args: Vec<String> = env::args().map(|s| format!(r#""{}""#, s)).collect();
-    println!("{}", args.join(", "));
-
-    let mut c = Chunk::new();
-    let idx = c.add_constant(3.14);
-    c.write(Instruction::Constant(idx), 0);
-    let idx = c.add_constant(10.0);
-    c.write(Instruction::Constant(idx), 1);
-    let idx = c.add_constant(2.0);
-    c.write(Instruction::Constant(idx), 2);
-    c.write(Instruction::Multiply, 3);
-    c.write(Instruction::Multiply, 3);
-    c.write(Instruction::Negate, 4);
-    c.write(Instruction::Negate, 4);
-    let idx = c.add_constant(10.0);
-    c.write(Instruction::Constant(idx), 10);
-    c.write(Instruction::Divide, 10);
-    c.write(Instruction::Return, 6);
-    c.disassemble("test chunk");
-
-    interpret(c);
+    let args: Vec<String> = env::args().collect();
+    match args.len() {
+        1 => repl(),
+        2 => run_file(&args[1]),
+        _ => std::process::exit(1),
+    }
 }
