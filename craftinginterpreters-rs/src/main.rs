@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::{self, Write};
@@ -147,7 +148,7 @@ impl Vm {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 enum TokenType {
     LeftParen,
     RightParen,
@@ -205,6 +206,7 @@ struct Token<'a> {
 }
 
 struct Scanner<'a> {
+    keywords: HashMap<&'static str, TokenType>,
     code: &'a str,
     start: usize,
     current: usize,
@@ -213,7 +215,26 @@ struct Scanner<'a> {
 
 impl<'a> Scanner<'a> {
     fn new(code: &'a str) -> Scanner {
+        let mut keywords = HashMap::with_capacity(16);
+        keywords.insert("and", TokenType::And);
+        keywords.insert("class", TokenType::Class);
+        keywords.insert("else", TokenType::Else);
+        keywords.insert("false", TokenType::False);
+        keywords.insert("for", TokenType::For);
+        keywords.insert("fun", TokenType::Fun);
+        keywords.insert("if", TokenType::If);
+        keywords.insert("nil", TokenType::Nil);
+        keywords.insert("or", TokenType::Or);
+        keywords.insert("print", TokenType::Print);
+        keywords.insert("return", TokenType::Return);
+        keywords.insert("super", TokenType::Super);
+        keywords.insert("this", TokenType::This);
+        keywords.insert("true", TokenType::True);
+        keywords.insert("var", TokenType::Var);
+        keywords.insert("while", TokenType::While);
+
         Scanner {
+            keywords,
             code,
             start: 0,
             current: 0,
@@ -247,6 +268,8 @@ impl<'a> Scanner<'a> {
             b'>' if self.matches(b'=') => self.make_token(TokenType::GreaterEqual),
             b'>' => self.make_token(TokenType::Greater),
             b'"' => self.string(),
+            c if is_digit(c) => self.number(),
+            c if is_alpha(c) => self.identifier(),
             _ => self.error_token("Unexpected character."),
         }
     }
@@ -255,10 +278,14 @@ impl<'a> Scanner<'a> {
         return self.current == self.code.len() - 1;
     }
 
+    fn lexeme(&self) -> &str {
+        &self.code[self.start..self.current]
+    }
+
     fn make_token(&self, kind: TokenType) -> Token {
         Token {
             kind,
-            lexeme: &self.code[self.start..self.current],
+            lexeme: self.lexeme(),
             line: self.line,
         }
     }
@@ -302,7 +329,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn skip_whitespace(&mut self) {
-        loop {
+        while !self.is_at_end() {
             match self.peek() {
                 b' ' | b'\r' | b'\t' => {
                     self.advance();
@@ -334,6 +361,40 @@ impl<'a> Scanner<'a> {
             self.make_token(TokenType::String)
         }
     }
+
+    fn number(&mut self) -> Token {
+        while is_digit(self.peek()) {
+            self.advance();
+        }
+        if self.peek() == b'.' && is_digit(self.peek_next()) {
+            self.advance();
+            while is_digit(self.peek()) {
+                self.advance();
+            }
+        }
+        self.make_token(TokenType::Number)
+    }
+
+    fn identifier(&mut self) -> Token {
+        while is_alpha(self.peek()) || is_digit(self.peek()) {
+            self.advance();
+        }
+        self.make_token(self.identifier_type())
+    }
+    fn identifier_type(&self) -> TokenType {
+        self.keywords
+            .get(self.lexeme())
+            .cloned()
+            .unwrap_or(TokenType::Identifier)
+    }
+}
+
+fn is_digit(c: u8) -> bool {
+    c >= b'0' && c <= b'9'
+}
+
+fn is_alpha(c: u8) -> bool {
+    (c >= b'a' && c <= b'z') || (c >= b'A' && c <= b'Z') || c == b'_'
 }
 
 fn interpret(chunk: Chunk) -> InterpreterResult {
@@ -341,7 +402,23 @@ fn interpret(chunk: Chunk) -> InterpreterResult {
     return vm.run();
 }
 
-fn compile(code: &str) {}
+fn compile(code: &str) {
+    let mut scanner = Scanner::new(code);
+    let mut line = 0;
+    loop {
+        let token = scanner.scan_token();
+        if token.line != line {
+            print!("{:>4} ", token.line);
+            line = token.line;
+        } else {
+            print!("   | ");
+        }
+        println!("{:?}\t {}", token.kind, token.lexeme);
+        if token.kind == TokenType::Eof {
+            break;
+        }
+    }
+}
 
 fn run_code(code: &str) -> InterpreterResult {
     compile(code);
