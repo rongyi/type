@@ -429,6 +429,34 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn compile(&mut self) -> bool {
+        self.advance();
+        self.expression();
+        self.consume(TokenType::Eof, "Expect end of expression.");
+        self.emit(Instruction::Return);
+
+        return self.had_error;
+    }
+
+    fn expression(&mut self) {}
+
+    fn number(&mut self) {
+        let value: f64 = self
+            .previous
+            .lexeme
+            .parse()
+            .expect("Parsed value is not a double");
+        self.emit_constant(value);
+    }
+
+    fn consume(&mut self, expected: TokenType, msg: &str) {
+        if self.current.kind == expected {
+            self.advance();
+            return;
+        }
+        self.error_at_current(msg);
+    }
+
     fn advance(&mut self) {
         self.previous = self.current;
         loop {
@@ -439,25 +467,6 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-    }
-
-    fn expression(&mut self) {}
-
-    fn consume(&mut self, expected: TokenType, msg: &str) {
-        if self.current.kind == expected {
-            self.advance();
-            return;
-        }
-        self.error_at_current(msg);
-    }
-
-    fn compile(&mut self) -> bool {
-        self.advance();
-        self.expression();
-        self.consume(TokenType::Eof, "Expect end of expression.");
-        self.emit(Instruction::Return);
-
-        return self.had_error;
     }
 
     fn error_at_current(&mut self, msg: &str) {
@@ -483,9 +492,21 @@ impl<'a> Parser<'a> {
         eprintln!(": {}", msg);
     }
 
-
     fn emit(&mut self, instruction: Instruction) {
         self.chunk.write(instruction, self.previous.line);
+    }
+
+    fn emit_constant(&mut self, value: Value) {
+        let index = self.chunk.add_constant(value);
+        let index = match u8::try_from(index) {
+            Ok(index) => index,
+            Err(_) => {
+                self.error("Too many constants in one chunk.");
+                0
+            }
+        };
+
+        self.emit(Instruction::Constant(index as usize));
     }
 }
 
