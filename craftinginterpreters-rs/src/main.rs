@@ -6,8 +6,6 @@ use std::fs;
 use std::io::{self, Write};
 use std::process;
 
-const DEBUG: bool = true;
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Value {
     Nil,
@@ -81,6 +79,7 @@ impl Chunk {
         self.constants[index]
     }
 
+    #[cfg(debug_assertions)]
     fn disassemble(&self, name: &str) {
         println!("=== {} ===", name);
         for (offset, instruction) in self.code.iter().enumerate() {
@@ -88,6 +87,7 @@ impl Chunk {
         }
     }
 
+    #[cfg(debug_assertions)]
     fn disassemble_instruction(&self, instruction: &Instruction, offset: usize) {
         print!("{:04} ", offset);
         let line = self.lines[offset];
@@ -164,12 +164,14 @@ impl Vm {
 
     fn run(&mut self) -> Result<(), LoxError> {
         loop {
-            for val in self.stack.iter() {
-                print!("[{}]", val);
-            }
-            println!("");
             let instruction = self.next_instruction();
-            if DEBUG {
+            #[cfg(debug_assertions)]
+            {
+                for val in self.stack.iter() {
+                    print!("[{}]", val);
+                }
+                println!("");
+                #[cfg(debug_assertions)]
                 self.chunk
                     .disassemble_instruction(&instruction, self.ip - 1);
             }
@@ -692,7 +694,8 @@ impl<'a> Parser<'a> {
         self.consume(TokenType::Eof, "Expect end of expression.");
         self.emit(Instruction::Return);
 
-        if DEBUG && !self.had_error {
+        #[cfg(debug_assertions)]
+        if !self.had_error {
             self.chunk.disassemble("code");
         }
 
