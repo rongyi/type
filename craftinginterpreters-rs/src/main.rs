@@ -6,20 +6,26 @@ use std::fs;
 use std::io::{self, Write};
 use std::process;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 enum Value {
     Nil,
     Bool(bool),
     Number(f64),
+    Object(LoxObject),
 }
 
 impl Value {
     fn is_falsy(&self) -> bool {
         match self {
-            Value::Nil | Value::Number(_) => true,
+            Value::Nil | Value::Number(_) | Value::Object(_) => true,
             Value::Bool(value) => !value,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum LoxObject {
+    LoxString(String),
 }
 
 impl fmt::Display for Value {
@@ -28,6 +34,7 @@ impl fmt::Display for Value {
             Value::Nil => write!(f, "nil"),
             Value::Bool(value) => write!(f, "{}", value),
             Value::Number(value) => write!(f, "{}", value),
+            Value::Object(_) => write!(f, "<object>"),
         }
     }
 }
@@ -76,7 +83,7 @@ impl Chunk {
     }
 
     fn read_constant(&self, index: usize) -> Value {
-        self.constants[index]
+        self.constants[index].clone()
     }
 
     #[cfg(debug_assertions)]
@@ -98,7 +105,7 @@ impl Chunk {
         }
         match instruction {
             Instruction::Constant(index) => {
-                let value = self.constants[*index];
+                let value = self.constants[*index].clone();
                 println!("{:<16} {:4} {}", "OP_CONSTANT", index, value);
             }
 
@@ -189,7 +196,7 @@ impl Vm {
                 }
                 Instruction::False => self.push(Value::Bool(false)),
                 Instruction::Greater => self.binary_op(|a, b| a > b, |n| Value::Bool(n))?,
-                Instruction::Less => self.binary_op(|a, b| a < b, |b| Value::Bool(b))?,
+                Instruction::Less => self.binary_op(|a, b| a < b, |n| Value::Bool(n))?,
                 Instruction::Multiply => self.binary_op(|a, b| a * b, |n| Value::Number(n))?,
                 Instruction::Negate => {
                     if let Value::Number(value) = self.peek() {
@@ -717,6 +724,11 @@ impl<'a> Parser<'a> {
             .parse()
             .expect("Parsed value is not a double");
         self.emit_constant(Value::Number(value));
+    }
+
+    fn string(&mut self) {
+        let obj = LoxObject::LoxString(String::from(self.current.lexeme));
+        self.emit_constant(Value::Object(obj));
     }
 
     fn literal(&mut self) {
