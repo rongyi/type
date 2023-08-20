@@ -8,11 +8,20 @@ use std::process;
 
 const DEBUG: bool = true;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum Value {
     Nil,
     Bool(bool),
     Number(f64),
+}
+
+impl Value {
+    fn is_falsy(&self) -> bool {
+        match self {
+            Value::Nil | Value::Number(_) => true,
+            Value::Bool(value) => !value,
+        }
+    }
 }
 
 impl fmt::Display for Value {
@@ -30,13 +39,17 @@ enum Instruction {
     Add,
     Constant(usize),
     Divide,
+    Equal,
+    False,
+    Greater,
+    Less,
     Multiply,
     Negate,
+    Nil,
+    Not,
     Return,
     Substract,
-    Nil,
     True,
-    False,
 }
 
 struct Chunk {
@@ -84,19 +97,24 @@ impl Chunk {
             print!("{:>4} ", line);
         }
         match instruction {
-            Instruction::Nil => println!("OP_NIL"),
-            Instruction::True => println!("OP_TRUE"),
-            Instruction::False => println!("OP_FALSE"),
-            Instruction::Add => println!("OP_ADD"),
-            Instruction::Divide => println!("OP_DIVIDE"),
-            Instruction::Multiply => println!("OP_MULTIPLY"),
-            Instruction::Negate => println!("OP_NEGATE"),
-            Instruction::Substract => println!("OP_SUBSTRACT"),
-            Instruction::Return => println!("OP_RETURN"),
             Instruction::Constant(index) => {
                 let value = self.constants[*index];
                 println!("{:<16} {:4} {}", "OP_CONSTANT", index, value);
             }
+
+            Instruction::Add => println!("OP_ADD"),
+            Instruction::Divide => println!("OP_DIVIDE"),
+            Instruction::Equal => println!("OP_EQUAL"),
+            Instruction::False => println!("OP_FALSE"),
+            Instruction::Greater => println!("OP_GREATER"),
+            Instruction::Less => println!("OP_LESS"),
+            Instruction::Multiply => println!("OP_MULTIPLY"),
+            Instruction::Negate => println!("OP_NEGATE"),
+            Instruction::Not => println!("OP_NOT"),
+            Instruction::Nil => println!("OP_NIL"),
+            Instruction::Return => println!("OP_RETURN"),
+            Instruction::Substract => println!("OP_SUBSTRACT"),
+            Instruction::True => println!("OP_TRUE"),
         }
     }
 }
@@ -144,10 +162,24 @@ impl Vm {
         }
     }
 
+    fn comparison_op(&mut self, f: fn(f64, f64) -> bool) -> Result<(), LoxError> {
+        let operands = (self.pop(), self.pop());
+        match operands {
+            (Value::Number(b), Value::Number(a)) => {
+                self.push(Value::Bool(f(a, b)));
+                Ok(())
+            }
+            _ => {
+                self.runtime_error("Operands must be numbers.");
+                Err(LoxError::RuntimeError)
+            }
+        }
+    }
+
     fn run(&mut self) -> Result<(), LoxError> {
         loop {
             for val in self.stack.iter() {
-                print!("[ {} ]", val);
+                print!("[{}]", val);
             }
             println!("");
             let instruction = self.next_instruction();
@@ -156,13 +188,21 @@ impl Vm {
                     .disassemble_instruction(&instruction, self.ip - 1);
             }
             match instruction {
+                Instruction::Add => self.binary_op(|a, b| a + b)?,
                 Instruction::Constant(index) => {
                     let val = self.chunk.read_constant(index);
                     self.stack.push(val);
                 }
-                Instruction::Nil => self.push(Value::Nil),
-                Instruction::True => self.push(Value::Bool(true)),
+                Instruction::Divide => self.binary_op(|a, b| a / b)?,
+                Instruction::Equal => {
+                    let a = self.pop();
+                    let b = self.pop();
+                    self.push(Value::Bool(a == b));
+                }
                 Instruction::False => self.push(Value::Bool(false)),
+                Instruction::Greater => self.comparison_op(|a, b| a > b)?,
+                Instruction::Less => self.comparison_op(|a, b| a < b)?,
+                Instruction::Multiply => self.binary_op(|a, b| a * b)?,
                 Instruction::Negate => {
                     if let Value::Number(value) = self.peek() {
                         self.pop();
@@ -172,14 +212,17 @@ impl Vm {
                         return Err(LoxError::RuntimeError);
                     }
                 }
+                Instruction::Nil => self.push(Value::Nil),
+                Instruction::Not => {
+                    let value = self.pop();
+                    self.push(Value::Bool(value.is_falsy()));
+                }
                 Instruction::Return => {
                     println!("{}", self.stack.pop().expect("empty stack!"));
                     return Ok(());
                 }
-                Instruction::Add => self.binary_op(|a, b| a + b)?,
-                Instruction::Divide => self.binary_op(|a, b| a / b)?,
-                Instruction::Multiply => self.binary_op(|a, b| a * b)?,
                 Instruction::Substract => self.binary_op(|a, b| a - b)?,
+                Instruction::True => self.push(Value::Bool(true)),
             }
         }
     }
@@ -482,6 +525,7 @@ impl Precedence {
 
 type ParseFn<'a> = fn(&mut Parser<'a>) -> ();
 
+#[derive(Copy, Clone)]
 struct ParseRule<'a> {
     prefix: Option<ParseFn<'a>>,
     infix: Option<ParseFn<'a>>,
@@ -565,14 +609,44 @@ impl<'a> Parser<'a> {
             Some(Parser::binary),
             Precedence::Factor,
         );
-        rule(TokenType::Bang, None, None, Precedence::None);
-        rule(TokenType::BangEqual, None, None, Precedence::None);
+        rule(TokenType::Bang, Some(Parser::unary), None, Precedence::None);
+        rule(
+            TokenType::BangEqual,
+            None,
+            Some(Parser::binary),
+            Precedence::Equality,
+        );
         rule(TokenType::Equal, None, None, Precedence::None);
-        rule(TokenType::EqualEqual, None, None, Precedence::None);
-        rule(TokenType::Greater, None, None, Precedence::None);
-        rule(TokenType::GreaterEqual, None, None, Precedence::None);
-        rule(TokenType::Less, None, None, Precedence::None);
-        rule(TokenType::LessEqual, None, None, Precedence::None);
+        rule(
+            TokenType::EqualEqual,
+            None,
+            Some(Parser::binary),
+            Precedence::Equality,
+        );
+        rule(
+            TokenType::Greater,
+            None,
+            Some(Parser::binary),
+            Precedence::Comparison,
+        );
+        rule(
+            TokenType::GreaterEqual,
+            None,
+            Some(Parser::binary),
+            Precedence::Comparison,
+        );
+        rule(
+            TokenType::Less,
+            None,
+            Some(Parser::binary),
+            Precedence::Comparison,
+        );
+        rule(
+            TokenType::LessEqual,
+            None,
+            Some(Parser::binary),
+            Precedence::Comparison,
+        );
         rule(TokenType::Identifier, None, None, Precedence::None);
         rule(TokenType::String, None, None, Precedence::None);
         rule(
@@ -674,6 +748,7 @@ impl<'a> Parser<'a> {
         let operator = self.previous.kind;
         self.parse_precedence(Precedence::Unary);
         match operator {
+            TokenType::Bang => self.emit(Instruction::Not),
             TokenType::Minus => self.emit(Instruction::Negate),
             _ => panic!("Invalid unary operator"),
         }
@@ -688,7 +763,14 @@ impl<'a> Parser<'a> {
             TokenType::Minus => self.emit(Instruction::Substract),
             TokenType::Star => self.emit(Instruction::Multiply),
             TokenType::Slash => self.emit(Instruction::Divide),
-            _ => panic!("Invalid unary operator"),
+            TokenType::BangEqual => self.emit_two(Instruction::Equal, Instruction::Not),
+            TokenType::EqualEqual => self.emit(Instruction::Equal),
+            TokenType::Greater => self.emit(Instruction::Greater),
+            TokenType::GreaterEqual => self.emit_two(Instruction::Less, Instruction::Not),
+            TokenType::Less => self.emit(Instruction::Less),
+            TokenType::LessEqual => self.emit_two(Instruction::Greater, Instruction::Not),
+
+            _ => panic!("Invalid binary operator"),
         }
     }
 
@@ -754,13 +836,18 @@ impl<'a> Parser<'a> {
         if token.kind == TokenType::Eof {
             eprint!(" at end");
         } else {
-            eprint!("at '{}'", token.lexeme);
+            eprint!(" at '{}'", token.lexeme);
         }
         eprintln!(": {}", msg);
     }
 
     fn emit(&mut self, instruction: Instruction) {
         self.chunk.write(instruction, self.previous.line);
+    }
+
+    fn emit_two(&mut self, i1: Instruction, i2: Instruction) {
+        self.chunk.write(i1, self.previous.line);
+        self.chunk.write(i2, self.previous.line);
     }
 
     fn emit_constant(&mut self, value: Value) {
@@ -776,8 +863,8 @@ impl<'a> Parser<'a> {
         self.emit(Instruction::Constant(index as usize));
     }
 
-    fn get_rule(&self, kind: TokenType) -> &ParseRule<'a> {
-        self.rules.get(&kind).unwrap()
+    fn get_rule(&self, kind: TokenType) -> ParseRule<'a> {
+        self.rules.get(&kind).cloned().unwrap()
     }
 }
 
