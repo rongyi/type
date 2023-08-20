@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::env;
 use std::fmt;
 use std::fs;
@@ -7,7 +8,7 @@ use std::process;
 
 const DEBUG: bool = true;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone, Copy)]
 enum Value {
     Nil,
     Bool(bool),
@@ -24,7 +25,7 @@ impl fmt::Display for Value {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Copy, Clone)]
 enum Instruction {
     Add,
     Constant(usize),
@@ -33,6 +34,9 @@ enum Instruction {
     Negate,
     Return,
     Substract,
+    Nil,
+    True,
+    False,
 }
 
 struct Chunk {
@@ -80,6 +84,9 @@ impl Chunk {
             print!("{:>4} ", line);
         }
         match instruction {
+            Instruction::Nil => println!("OP_NIL"),
+            Instruction::True => println!("OP_TRUE"),
+            Instruction::False => println!("OP_FALSE"),
             Instruction::Add => println!("OP_ADD"),
             Instruction::Divide => println!("OP_DIVIDE"),
             Instruction::Multiply => println!("OP_MULTIPLY"),
@@ -153,6 +160,9 @@ impl Vm {
                     let val = self.chunk.read_constant(index);
                     self.stack.push(val);
                 }
+                Instruction::Nil => self.push(Value::Nil),
+                Instruction::True => self.push(Value::Bool(true)),
+                Instruction::False => self.push(Value::Bool(false)),
                 Instruction::Negate => {
                     if let Value::Number(value) = self.peek() {
                         self.pop();
@@ -238,7 +248,7 @@ enum TokenType {
     Eof,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Copy, Clone)]
 struct Token<'a> {
     kind: TokenType,
     line: usize,
@@ -574,17 +584,32 @@ impl<'a> Parser<'a> {
         rule(TokenType::And, None, None, Precedence::None);
         rule(TokenType::Class, None, None, Precedence::None);
         rule(TokenType::Else, None, None, Precedence::None);
-        rule(TokenType::False, None, None, Precedence::None);
+        rule(
+            TokenType::False,
+            Some(Parser::literal),
+            None,
+            Precedence::None,
+        );
         rule(TokenType::For, None, None, Precedence::None);
         rule(TokenType::Fun, None, None, Precedence::None);
         rule(TokenType::If, None, None, Precedence::None);
-        rule(TokenType::Nil, None, None, Precedence::None);
+        rule(
+            TokenType::Nil,
+            Some(Parser::literal),
+            None,
+            Precedence::None,
+        );
         rule(TokenType::Or, None, None, Precedence::None);
         rule(TokenType::Print, None, None, Precedence::None);
         rule(TokenType::Return, None, None, Precedence::None);
         rule(TokenType::Super, None, None, Precedence::None);
         rule(TokenType::This, None, None, Precedence::None);
-        rule(TokenType::True, None, None, Precedence::None);
+        rule(
+            TokenType::True,
+            Some(Parser::literal),
+            None,
+            Precedence::None,
+        );
         rule(TokenType::Var, None, None, Precedence::None);
         rule(TokenType::While, None, None, Precedence::None);
         rule(TokenType::Error, None, None, Precedence::None);
@@ -629,6 +654,15 @@ impl<'a> Parser<'a> {
             .parse()
             .expect("Parsed value is not a double");
         self.emit_constant(Value::Number(value));
+    }
+
+    fn literal(&mut self) {
+        match self.previous.kind {
+            TokenType::False => self.emit(Instruction::False),
+            TokenType::True => self.emit(Instruction::True),
+            TokenType::Nil => self.emit(Instruction::Nil),
+            _ => panic!("Unreachable literal"),
+        }
     }
 
     fn grouping(&mut self) {
