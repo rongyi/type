@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::strings::{LoxString, Strings};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Value {
     Nil,
     Bool(bool),
@@ -38,6 +38,7 @@ pub enum Instruction {
     Divide,
     Equal,
     False,
+    GetGlobal(usize),
     Greater,
     Less,
     Multiply,
@@ -81,6 +82,13 @@ impl Chunk {
     pub fn read_constant(&self, index: usize) -> Value {
         self.constants[index].clone()
     }
+    pub fn read_string(&self, index: usize) -> LoxString {
+        if let Value::String(s) = self.read_constant(index) {
+            s
+        } else {
+            panic!("Constant is not String!")
+        }
+    }
 
     #[cfg(debug_assertions)]
     pub fn disassemble(&self, name: &str) {
@@ -106,6 +114,7 @@ impl Chunk {
             Instruction::Divide => println!("OP_DIVIDE"),
             Instruction::Equal => println!("OP_EQUAL"),
             Instruction::False => println!("OP_FALSE"),
+            Instruction::GetGlobal(i) => self.disassemble_constant("OP_GET_GLOBAL", *i),
             Instruction::Greater => println!("OP_GREATER"),
             Instruction::Less => println!("OP_LESS"),
             Instruction::Multiply => println!("OP_MULTIPLY"),
