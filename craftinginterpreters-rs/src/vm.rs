@@ -1,12 +1,15 @@
 use crate::{
     chunk::{Chunk, Instruction, Value},
     error::LoxError,
+    strings::LoxString,
 };
+use std::collections::HashMap;
 
 pub struct Vm {
     chunk: Chunk,
     ip: usize,
     stack: Vec<Value>,
+    globals: HashMap<LoxString, Value>,
 }
 
 impl Vm {
@@ -15,6 +18,7 @@ impl Vm {
             chunk,
             ip: 0,
             stack: Vec::with_capacity(256),
+            globals: HashMap::new(),
         }
     }
     fn push(&mut self, val: Value) {
@@ -64,8 +68,12 @@ impl Vm {
                             self.push(Value::Number(a + b));
                         }
                         (Value::String(a), Value::String(b)) => {
-                            let ret = Value::String(format!("{}{}", a, b));
-                            self.push(ret);
+                            let s_a = self.chunk.strings.lookup(*a);
+                            let s_b = self.chunk.strings.lookup(*b);
+                            let result = format!("{}{}", s_a, s_b);
+                            let s = self.chunk.strings.intern_owned(result);
+                            let value = Value::String(s);
+                            self.push(value);
                         }
                         _ => {
                             self.push(a);
@@ -80,6 +88,12 @@ impl Vm {
                 Instruction::Constant(index) => {
                     let val = self.chunk.read_constant(index);
                     self.stack.push(val);
+                }
+                Instruction::DefineGlobal(index) => {
+                    if let Value::String(s) = self.chunk.read_constant(index) {
+                        let value = self.pop();
+                        self.globals.insert(s, value);
+                    }
                 }
                 Instruction::Divide => self.binary_op(|a, b| a / b, |n| Value::Number(n))?,
                 Instruction::Equal => {
@@ -105,8 +119,16 @@ impl Vm {
                     let value = self.pop();
                     self.push(Value::Bool(value.is_falsy()));
                 }
+                Instruction::Pop => {
+                    self.pop();
+                }
                 Instruction::Print => {
-                    println!("{}", self.pop());
+                    let value = self.pop();
+                    if let Value::String(idx) = value {
+                        println!("{}", self.chunk.strings.lookup(idx));
+                    } else {
+                        println!("{}", value);
+                    }
                 }
                 Instruction::Return => {
                     return Ok(());

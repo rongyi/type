@@ -245,13 +245,43 @@ impl<'a> Parser<'a> {
         self.parse_precedence(Precedence::Assignment);
     }
 
+    fn expression_statement(&mut self) {
+        self.expression();
+        self.consume(TokenType::Semicolon, "Expect ';' after expression.");
+        self.emit(Instruction::Pop);
+    }
+
     fn declaration(&mut self) {
-        self.statement();
+        if self.matches(TokenType::Var) {
+            self.var_declaration();
+        } else {
+            self.statement();
+        }
+
+        if self.panic_mode {
+            self.synchronize();
+        }
+    }
+
+    fn var_declaration(&mut self) {
+        let index = self.parse_variable("Expect variable name.");
+        if self.matches(TokenType::Equal) {
+            self.expression();
+        } else {
+            self.emit(Instruction::Nil);
+        }
+        self.consume(
+            TokenType::Semicolon,
+            "Expect ';' after variable declaration.",
+        );
+        self.emit(Instruction::DefineGlobal(index));
     }
 
     fn statement(&mut self) {
         if self.matches(TokenType::Print) {
             self.print_statement();
+        } else {
+            self.expression_statement();
         }
     }
 
@@ -286,7 +316,8 @@ impl<'a> Parser<'a> {
     fn string(&mut self) {
         let lexeme = self.previous.lexeme;
         let value = &lexeme[1..(lexeme.len() - 1)];
-        self.emit_constant(Value::String(String::from(value)));
+        let s = self.chunk.strings.intern(value);
+        self.emit_constant(Value::String(s));
     }
 
     fn literal(&mut self) {
@@ -352,6 +383,12 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_variable(&mut self, msg: &str) -> usize {
+        self.consume(TokenType::Identifier, msg);
+        let identifier = self.chunk.strings.intern(self.previous.lexeme);
+        let value = Value::String(identifier);
+        self.make_constant(value)
+    }
     fn is_lower_precedence(&self, precedence: Precedence) -> bool {
         let current_precedence = self.get_rule(self.current.kind).precedence;
         (precedence as u8) <= (current_precedence as u8)
@@ -400,6 +437,28 @@ impl<'a> Parser<'a> {
         eprintln!(": {}", msg);
     }
 
+    fn synchronize(&mut self) {
+        self.panic_mode = false;
+        while self.previous.kind != TokenType::Eof {
+            if self.previous.kind == TokenType::Semicolon {
+                return;
+            }
+            match self.current.kind {
+                TokenType::Class
+                | TokenType::Fun
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::While
+                | TokenType::Print
+                | TokenType::Return => return,
+                _ => (),
+            }
+
+            self.advance();
+        }
+    }
+
     fn emit(&mut self, instruction: Instruction) {
         self.chunk.write(instruction, self.previous.line);
     }
@@ -409,17 +468,18 @@ impl<'a> Parser<'a> {
         self.chunk.write(i2, self.previous.line);
     }
 
-    fn emit_constant(&mut self, value: Value) {
+    fn make_constant(&mut self, value: Value) -> usize {
         let index = self.chunk.add_constant(value);
         let index = match u8::try_from(index) {
             Ok(index) => index,
-            Err(_) => {
-                self.error("Too many constants in one chunk.");
-                0
-            }
+            _ => 0,
         };
+        index as usize
+    }
 
-        self.emit(Instruction::Constant(index as usize));
+    fn emit_constant(&mut self, value: Value) {
+        let index = self.make_constant(value);
+        self.emit(Instruction::Constant(index));
     }
 
     fn get_rule(&self, kind: TokenType) -> ParseRule<'a> {
