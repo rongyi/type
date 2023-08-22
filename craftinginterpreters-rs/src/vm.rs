@@ -105,8 +105,10 @@ impl Vm {
                     let value = self.pop();
                     self.push(Value::Bool(value.is_falsy()));
                 }
+                Instruction::Print => {
+                    println!("{}", self.pop());
+                }
                 Instruction::Return => {
-                    println!("{}", self.stack.pop().expect("empty stack!"));
                     return Ok(());
                 }
                 Instruction::Substract => self.binary_op(|a, b| a - b, |n| Value::Number(n))?,
