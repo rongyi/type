@@ -154,6 +154,19 @@ impl Vm {
                         println!("{}", value);
                     }
                 }
+                Instruction::SetGlobal(index) => {
+                    let name = self.chunk.read_string(index);
+                    let value = self.peek(0);
+                    // means not exist name, so this is an error
+                    if let None = self.globals.insert(name, value) {
+                        // delete
+                        self.globals.remove(&name);
+                        let s = self.strings.lookup(name);
+                        let msg = format!("Undefined variable '{}'.", s);
+                        self.runtime_error(&msg);
+                        return Err(LoxError::RuntimeError);
+                    }
+                }
                 Instruction::Return => {
                     return Ok(());
                 }
