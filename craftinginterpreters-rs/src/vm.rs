@@ -1,7 +1,8 @@
 use crate::{
     chunk::{Chunk, Instruction, Value},
     error::LoxError,
-    strings::LoxString,
+    parser::Parser,
+    strings::{LoxString, Strings},
 };
 use std::collections::HashMap;
 
@@ -10,17 +11,27 @@ pub struct Vm {
     ip: usize,
     stack: Vec<Value>,
     globals: HashMap<LoxString, Value>,
+    strings: Strings,
 }
 
 impl Vm {
-    pub fn new(chunk: Chunk) -> Self {
+    pub fn new() -> Self {
         Self {
-            chunk,
+            chunk: Chunk::new(),
             ip: 0,
             stack: Vec::with_capacity(256),
             globals: HashMap::new(),
+            strings: Strings::default(),
         }
     }
+    pub fn interpret(&mut self, code: &str) -> Result<(), LoxError> {
+        self.chunk = Chunk::new();
+        let mut parser = Parser::new(code, &mut self.chunk, &mut self.strings);
+        parser.compile()?;
+        self.ip = 0;
+        self.run()
+    }
+
     fn push(&mut self, val: Value) {
         self.stack.push(val);
     }
@@ -47,7 +58,7 @@ impl Vm {
         }
     }
 
-    pub fn run(&mut self) -> Result<(), LoxError> {
+    fn run(&mut self) -> Result<(), LoxError> {
         loop {
             let instruction = self.next_instruction();
             #[cfg(debug_assertions)]
@@ -68,10 +79,10 @@ impl Vm {
                             self.push(Value::Number(a + b));
                         }
                         (Value::String(a), Value::String(b)) => {
-                            let s_a = self.chunk.strings.lookup(*a);
-                            let s_b = self.chunk.strings.lookup(*b);
+                            let s_a = self.strings.lookup(*a);
+                            let s_b = self.strings.lookup(*b);
                             let result = format!("{}{}", s_a, s_b);
-                            let s = self.chunk.strings.intern_owned(result);
+                            let s = self.strings.intern_owned(result);
                             let value = Value::String(s);
                             self.push(value);
                         }
@@ -108,7 +119,7 @@ impl Vm {
                     match self.globals.get(&s) {
                         Some(&value) => self.push(value),
                         None => {
-                            let name = self.chunk.strings.lookup(s);
+                            let name = self.strings.lookup(s);
                             let msg = format!("Undefined variable '{}'.", name);
                             self.runtime_error(&msg);
                             return Err(LoxError::RuntimeError);
@@ -138,7 +149,7 @@ impl Vm {
                 Instruction::Print => {
                     let value = self.pop();
                     if let Value::String(idx) = value {
-                        println!("{}", self.chunk.strings.lookup(idx));
+                        println!("{}", self.strings.lookup(idx));
                     } else {
                         println!("{}", value);
                     }

@@ -2,6 +2,7 @@ use crate::{
     chunk::{Chunk, Instruction, Value},
     error::LoxError,
     scanner::{Scanner, Token, TokenType},
+    strings::Strings,
 };
 
 use std::collections::HashMap;
@@ -65,7 +66,8 @@ impl<'a> ParseRule<'a> {
 
 pub struct Parser<'a> {
     scanner: Scanner<'a>,
-    pub chunk: Chunk,
+    chunk: &'a mut Chunk,
+    strings: &'a mut Strings,
     current: Token<'a>,
     previous: Token<'a>,
     had_error: bool,
@@ -74,7 +76,7 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(code: &'a str) -> Parser<'a> {
+    pub fn new(code: &'a str, chunk: &'a mut Chunk, strings: &'a mut Strings) -> Parser<'a> {
         let t1 = Token {
             kind: TokenType::Eof,
             lexeme: "",
@@ -218,7 +220,8 @@ impl<'a> Parser<'a> {
 
         Parser {
             scanner: Scanner::new(code),
-            chunk: Chunk::new(),
+            chunk,
+            strings,
             current: t1,
             previous: t2,
             had_error: false,
@@ -321,7 +324,7 @@ impl<'a> Parser<'a> {
     fn string(&mut self) {
         let lexeme = self.previous.lexeme;
         let value = &lexeme[1..(lexeme.len() - 1)];
-        let s = self.chunk.strings.intern(value);
+        let s = self.strings.intern(value);
         self.emit_constant(Value::String(s));
     }
 
@@ -403,7 +406,7 @@ impl<'a> Parser<'a> {
     }
 
     fn identifier_constant(&mut self, token: Token) -> usize {
-        let identifier = self.chunk.strings.intern(token.lexeme);
+        let identifier = self.strings.intern(token.lexeme);
         let value = Value::String(identifier);
         self.make_constant(value)
     }

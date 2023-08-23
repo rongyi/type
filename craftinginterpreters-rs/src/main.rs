@@ -5,24 +5,13 @@ mod scanner;
 mod strings;
 mod vm;
 
-use parser::Parser;
-use error::LoxError;
-use vm::Vm;
 use std::env;
 use std::fs;
 use std::io::{self, Write};
 use std::process;
+use vm::Vm;
 
-
-fn interpret(code: &str) -> Result<(), LoxError> {
-    let mut parser = Parser::new(code);
-    parser.compile()?;
-    let mut vm = Vm::new(parser.chunk);
-
-    return vm.run();
-}
-
-fn repl() {
+fn repl(vm: &mut Vm) {
     let mut line = String::new();
     loop {
         print!("> ");
@@ -33,12 +22,12 @@ fn repl() {
         if line.len() == 0 {
             break;
         }
-        let _ = interpret(&line);
+        let _ = vm.interpret(&line);
         line.clear();
     }
 }
 
-fn run_file(path: &str) {
+fn run_file(vm: &mut Vm, path: &str) {
     let code = match fs::read_to_string(path) {
         Ok(content) => content,
         Err(err) => {
@@ -46,7 +35,7 @@ fn run_file(path: &str) {
             process::exit(74);
         }
     };
-    match interpret(&code) {
+    match vm.interpret(&code) {
         Ok(_) => process::exit(65),
         _ => process::exit(70),
     }
@@ -54,9 +43,10 @@ fn run_file(path: &str) {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    let mut vm = Vm::new();
     match args.len() {
-        1 => repl(),
-        2 => run_file(&args[1]),
+        1 => repl(&mut vm),
+        2 => run_file(&mut vm, &args[1]),
         _ => process::exit(64),
     }
 }
