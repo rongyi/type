@@ -212,7 +212,7 @@ impl<'a> Parser<'a> {
             None,
             Precedence::None,
         );
-        rule(TokenType::And, None, None, Precedence::None);
+        rule(TokenType::And, None, Some(Parser::and_op), Precedence::And);
         rule(TokenType::Class, None, None, Precedence::None);
         rule(TokenType::Else, None, None, Precedence::None);
         rule(
@@ -230,7 +230,7 @@ impl<'a> Parser<'a> {
             None,
             Precedence::None,
         );
-        rule(TokenType::Or, None, None, Precedence::None);
+        rule(TokenType::Or, None, Some(Parser::or_op), Precedence::Or);
         rule(TokenType::Print, None, None, Precedence::None);
         rule(TokenType::Return, None, None, Precedence::None);
         rule(TokenType::Super, None, None, Precedence::None);
@@ -496,6 +496,30 @@ impl<'a> Parser<'a> {
 
             _ => panic!("Invalid binary operator"),
         };
+    }
+
+    fn and_op(&mut self, _can_assign: bool) {
+        let false_jump = self.emit(Instruction::JumpIfFalse(0xffff));
+        // ok, if we execute this instruction, means previous bool value is true
+        // so we pop the true value because it may not the final and value
+        // and eval next
+        self.emit(Instruction::Pop);
+        self.parse_precedence(Precedence::And);
+        self.patch_jump(false_jump);
+        // leave the false value on the stack
+    }
+    fn or_op(&mut self, _can_assign: bool) {
+        // it's a 'guard' for true jump, when the value is true
+        // we bypass all the following or instruction and leave this
+        // true value on stack
+        // else we ignore the true jump and eval next
+        let false_jump = self.emit(Instruction::JumpIfFalse(0xffff));
+        let true_jump = self.emit(Instruction::Jump(0xffff));
+        self.patch_jump(false_jump);
+        self.emit(Instruction::Pop);
+        self.parse_precedence(Precedence::Or);
+        self.patch_jump(true_jump);
+        // leave the true value on the stack
     }
 
     fn parse_precedence(&mut self, precedence: Precedence) {
