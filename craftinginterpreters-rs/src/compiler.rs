@@ -333,6 +333,8 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) {
         if self.matches(TokenType::Print) {
             self.print_statement();
+        } else if self.matches(TokenType::If) {
+            self.if_statement();
         } else if self.matches(TokenType::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -341,6 +343,23 @@ impl<'a> Parser<'a> {
             self.expression_statement();
         }
     }
+
+    fn if_statement(&mut self) {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.");
+        self.expression();
+        self.consume(TokenType::RightParen, "Expect ')' after condition.");
+        let then_jump = self.emit(Instruction::JumpIfFalse(0xffff));
+        self.emit(Instruction::Pop);
+        self.statement();
+        let else_jump = self.emit(Instruction::Jump(0xffff));
+        self.patch_jump(then_jump);
+        self.emit(Instruction::Pop);
+        if self.matches(TokenType::Else) {
+            self.statement();
+        }
+        self.patch_jump(else_jump);
+    }
+
     fn begin_scope(&mut self) {
         self.compiler.scope_depth += 1;
     }
@@ -405,7 +424,7 @@ impl<'a> Parser<'a> {
             TokenType::True => self.emit(Instruction::True),
             TokenType::Nil => self.emit(Instruction::Nil),
             _ => panic!("Unreachable literal"),
-        }
+        };
     }
 
     fn variable(&mut self, can_assign: bool) {
@@ -426,7 +445,7 @@ impl<'a> Parser<'a> {
 
         if can_assign && self.matches(TokenType::Equal) {
             self.expression();
-            self.emit(set_op)
+            self.emit(set_op);
         } else {
             self.emit(get_op);
         }
@@ -456,7 +475,7 @@ impl<'a> Parser<'a> {
             TokenType::Bang => self.emit(Instruction::Not),
             TokenType::Minus => self.emit(Instruction::Negate),
             _ => panic!("Invalid unary operator"),
-        }
+        };
     }
 
     fn binary(&mut self, _can_assign: bool) {
@@ -476,7 +495,7 @@ impl<'a> Parser<'a> {
             TokenType::LessEqual => self.emit_two(Instruction::Greater, Instruction::Not),
 
             _ => panic!("Invalid binary operator"),
-        }
+        };
     }
 
     fn parse_precedence(&mut self, precedence: Precedence) {
@@ -622,13 +641,30 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn emit(&mut self, instruction: Instruction) {
-        self.chunk.write(instruction, self.previous.line);
+    fn emit(&mut self, instruction: Instruction) -> usize {
+        self.chunk.write(instruction, self.previous.line)
     }
 
-    fn emit_two(&mut self, i1: Instruction, i2: Instruction) {
+    fn emit_two(&mut self, i1: Instruction, i2: Instruction) -> usize {
         self.chunk.write(i1, self.previous.line);
-        self.chunk.write(i2, self.previous.line);
+        self.chunk.write(i2, self.previous.line)
+    }
+
+    fn patch_jump(&mut self, pos: usize) {
+        let offset = self.chunk.code.len() - 1 - pos;
+        let offset = match u16::try_from(offset) {
+            Ok(offset) => offset,
+            Err(_) => {
+                self.error("Too much code to jump over.");
+                0xffff
+            }
+        };
+
+        match self.chunk.code[pos] {
+            Instruction::JumpIfFalse(ref mut o) => *o = offset,
+            Instruction::Jump(ref mut o) => *o = offset,
+            _ => panic!("Instruction at position is not jump"),
+        }
     }
 
     fn make_constant(&mut self, value: Value) -> usize {

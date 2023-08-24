@@ -40,6 +40,8 @@ pub enum Instruction {
     GetLocal(usize),
     GetGlobal(usize),
     Greater,
+    Jump(u16),
+    JumpIfFalse(u16),
     Less,
     Multiply,
     Negate,
@@ -69,9 +71,11 @@ impl Chunk {
         }
     }
 
-    pub fn write(&mut self, instruction: Instruction, line: usize) {
+    pub fn write(&mut self, instruction: Instruction, line: usize) -> usize {
         self.code.push(instruction);
         self.lines.push(line);
+
+        self.code.len() - 1
     }
 
     pub fn add_constant(&mut self, value: Value) -> usize {
@@ -117,6 +121,8 @@ impl Chunk {
             Instruction::GetGlobal(i) => self.disassemble_constant("OP_GET_GLOBAL", *i),
             Instruction::GetLocal(i) => self.disassemble_constant("OP_GET_LOCAL", *i),
             Instruction::Greater => println!("OP_GREATER"),
+            Instruction::Jump(offset) => println!("OP_JUMP {}", offset),
+            Instruction::JumpIfFalse(offset) => println!("OP_JUMP_IF_FALSE {}", offset),
             Instruction::Less => println!("OP_LESS"),
             Instruction::Multiply => println!("OP_MULTIPLY"),
             Instruction::Negate => println!("OP_NEGATE"),

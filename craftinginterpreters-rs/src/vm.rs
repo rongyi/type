@@ -57,6 +57,9 @@ impl Vm {
             }
         }
     }
+    fn jump_forward(&mut self, offset: u16) {
+        self.ip += offset as usize;
+    }
 
     fn run(&mut self) -> Result<(), LoxError> {
         loop {
@@ -131,6 +134,14 @@ impl Vm {
                     self.push(value);
                 }
                 Instruction::Greater => self.binary_op(|a, b| a > b, |n| Value::Bool(n))?,
+                Instruction::Jump(offset) => {
+                    self.jump_forward(offset);
+                }
+                Instruction::JumpIfFalse(offset) => {
+                    if self.peek(0).is_falsy() {
+                        self.jump_forward(offset);
+                    }
+                }
                 Instruction::Less => self.binary_op(|a, b| a < b, |n| Value::Bool(n))?,
                 Instruction::Multiply => self.binary_op(|a, b| a * b, |n| Value::Number(n))?,
                 Instruction::Negate => {
