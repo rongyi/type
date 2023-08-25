@@ -335,6 +335,8 @@ impl<'a> Parser<'a> {
             self.print_statement();
         } else if self.matches(TokenType::If) {
             self.if_statement();
+        } else if self.matches(TokenType::While) {
+            self.while_statement();
         } else if self.matches(TokenType::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -342,6 +344,20 @@ impl<'a> Parser<'a> {
         } else {
             self.expression_statement();
         }
+    }
+
+    fn while_statement(&mut self) {
+        let loop_start = self.start_loop();
+        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.");
+        self.expression();
+        self.consume(TokenType::RightParen, "Expect ')' after condition");
+        // guard
+        let exit_jump = self.emit(Instruction::JumpIfFalse(0xffff));
+        self.emit(Instruction::Pop);
+        self.statement();
+        self.emit_loop(loop_start);
+        self.patch_jump(exit_jump);
+        self.emit(Instruction::Pop);
     }
 
     fn if_statement(&mut self) {
@@ -672,6 +688,22 @@ impl<'a> Parser<'a> {
     fn emit_two(&mut self, i1: Instruction, i2: Instruction) -> usize {
         self.chunk.write(i1, self.previous.line);
         self.chunk.write(i2, self.previous.line)
+    }
+    fn start_loop(&self) -> usize {
+        self.chunk.code.len()
+    }
+
+    fn emit_loop(&mut self, start_pos: usize) {
+        // don't contain the loop instruction
+        let offset = self.chunk.code.len() - start_pos;
+        let offset = match u16::try_from(offset) {
+            Ok(o) => o,
+            Err(_) => {
+                self.error("Loop body too large.");
+                0xffff
+            }
+        };
+        self.emit(Instruction::Loop(offset));
     }
 
     fn patch_jump(&mut self, pos: usize) {
