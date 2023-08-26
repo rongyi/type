@@ -1,18 +1,19 @@
 mod chunk;
-mod error;
 mod compiler;
+mod error;
+mod function;
 mod scanner;
 mod strings;
-mod function;
 mod vm;
 
 use std::env;
 use std::fs;
 use std::io::{self, Write};
 use std::process;
-use vm::Vm;
+use vm::{ExecutionState, Vm};
 
 fn repl(vm: &mut Vm) {
+    let mut state = ExecutionState::new();
     let mut line = String::new();
     loop {
         print!("> ");
@@ -23,7 +24,7 @@ fn repl(vm: &mut Vm) {
         if line.len() == 0 {
             break;
         }
-        let _ = vm.interpret(&line);
+        vm.interpret(&line, &mut state).ok();
         line.clear();
     }
 }
@@ -36,7 +37,7 @@ fn run_file(vm: &mut Vm, path: &str) {
             process::exit(74);
         }
     };
-    match vm.interpret(&code) {
+    match vm.interpret(&code, &mut ExecutionState::new()) {
         Ok(_) => process::exit(65),
         _ => process::exit(70),
     }

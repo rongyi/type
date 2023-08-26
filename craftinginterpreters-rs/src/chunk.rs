@@ -1,5 +1,4 @@
 use crate::function::FunctionID;
-use crate::function::LoxFunction;
 use crate::strings::LoxString;
 use std::fmt;
 
@@ -37,6 +36,7 @@ impl fmt::Display for Value {
 #[derive(Debug, Copy, Clone)]
 pub enum Instruction {
     Add,
+    Call(usize),
     Constant(usize),
     DefineGlobal(usize),
     Divide,
@@ -120,6 +120,7 @@ impl Chunk {
         match instruction {
             Instruction::Constant(index) => self.disassemble_constant("OP_CONSTANT", *index),
             Instruction::Add => println!("OP_ADD"),
+            Instruction::Call(i) => println!("OP_CALL {}", i),
             Instruction::DefineGlobal(i) => self.disassemble_constant("OP_DEFINE_GLOBAL", *i),
             Instruction::Divide => println!("OP_DIVIDE"),
             Instruction::Equal => println!("OP_EQUAL"),

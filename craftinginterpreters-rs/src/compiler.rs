@@ -1,7 +1,7 @@
 use crate::{
     chunk::{Instruction, Value},
     error::LoxError,
-    function::{FunctionType, Functions, LoxFunction},
+    function::{FunctionID, FunctionType, Functions, LoxFunction},
     scanner::{Scanner, Token, TokenType},
     strings::Strings,
 };
@@ -145,7 +145,7 @@ impl<'a> Parser<'a> {
         rule(
             TokenType::LeftParen,
             Some(Parser::grouping),
-            None,
+            Some(Parser::call),
             Precedence::None,
         );
         rule(TokenType::RightParen, None, None, Precedence::None);
@@ -282,7 +282,7 @@ impl<'a> Parser<'a> {
     }
 
     // compile return a function which contain chunk
-    pub fn compile(mut self) -> Result<LoxFunction, LoxError> {
+    pub fn compile(mut self) -> Result<FunctionID, LoxError> {
         self.advance();
         while !self.matches(TokenType::Eof) {
             self.declaration();
@@ -297,7 +297,7 @@ impl<'a> Parser<'a> {
         if self.had_error {
             Err(LoxError::CompileError)
         } else {
-            Ok(self.compiler.function)
+            Ok(self.functions.store(self.compiler.function))
         }
     }
 
@@ -348,8 +348,8 @@ impl<'a> Parser<'a> {
             Some(enclosing) => {
                 let compiler = mem::replace(&mut self.compiler, enclosing);
                 compiler.function
-            },
-            None => panic!("Didn't find an enclosing compiler")
+            }
+            None => panic!("Didn't find an enclosing compiler"),
         }
     }
 
@@ -607,6 +607,31 @@ impl<'a> Parser<'a> {
             }
         }
         None
+    }
+
+    fn call(&mut self, _can_assign: bool) {
+        let arg_cnt = self.argument_list() as usize;
+        self.emit(Instruction::Call(arg_cnt));
+    }
+
+    fn argument_list(&mut self) -> usize {
+        let mut count = 0;
+        if !self.check(TokenType::RightParen) {
+            loop {
+                self.expression();
+                if count == 255 {
+                    self.error("Cannot have more than 255 arguments.");
+                }
+                count += 1;
+
+                if !self.matches(TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(TokenType::RightParen, "Expect ')' after arguments.");
+
+        count
     }
 
     fn grouping(&mut self, _can_assign: bool) {
