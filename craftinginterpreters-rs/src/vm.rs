@@ -1,34 +1,55 @@
 use crate::{
-    chunk::{Chunk, Instruction, Value},
+    chunk::{Instruction, Value},
     compiler::Parser,
     error::LoxError,
+    function::{Functions, LoxFunction},
     strings::{LoxString, Strings},
 };
 use std::collections::HashMap;
 
-pub struct Vm {
-    chunk: Chunk,
+struct CallFrame {
+    function: LoxFunction,
     ip: usize,
+    slot: usize, // what's this? base?
+}
+
+impl CallFrame {
+    fn new(function: LoxFunction) -> Self {
+        CallFrame {
+            function,
+            ip: 0,
+            slot: 0,
+        }
+    }
+}
+
+const MAX_FRAMES: usize = 64;
+const STACK_SIZE: usize = MAX_FRAMES * (std::u8::MAX as usize) + 1;
+
+pub struct Vm {
+    //chunk: Chunk,
+    frames: Vec<CallFrame>,
     stack: Vec<Value>,
     globals: HashMap<LoxString, Value>,
     strings: Strings,
+    functions: Functions,
 }
 
 impl Vm {
     pub fn new() -> Self {
         Self {
-            chunk: Chunk::new(),
-            ip: 0,
+            frames: Vec::with_capacity(MAX_FRAMES),
             stack: Vec::with_capacity(256),
             globals: HashMap::new(),
             strings: Strings::default(),
+            functions: Functions::default(),
         }
     }
+
     pub fn interpret(&mut self, code: &str) -> Result<(), LoxError> {
-        self.chunk = Chunk::new();
-        let mut parser = Parser::new(code, &mut self.chunk, &mut self.strings);
-        parser.compile()?;
-        self.ip = 0;
+        let parser = Parser::new(code, &mut self.strings, &mut self.functions);
+        let function = parser.compile()?;
+        self.frames.push(CallFrame::new(function));
         self.run()
     }
 
@@ -52,23 +73,20 @@ impl Vm {
                 Ok(())
             }
             _ => {
-                self.runtime_error("Operands must be numbers.");
+                let frame = match self.frames.last() {
+                    Some(f) => f,
+                    None => panic!("No frame available"),
+                };
+                Vm::runtime_error(frame, "Operands must be numbers.");
                 Err(LoxError::RuntimeError)
             }
         }
     }
-    fn jump_forward(&mut self, offset: u16) {
-        self.ip += offset as usize;
-    }
-
-    fn jump_backward(&mut self, offset: u16) {
-        // with the loop instruction itself
-        self.ip -= offset as usize + 1;
-    }
 
     fn run(&mut self) -> Result<(), LoxError> {
+        let mut frame = self.frames.pop().unwrap();
         loop {
-            let instruction = self.next_instruction();
+            let instruction = frame.function.chunk.code[frame.ip];
             #[cfg(debug_assertions)]
             {
                 for val in self.stack.iter() {
@@ -76,9 +94,13 @@ impl Vm {
                 }
                 println!("");
                 #[cfg(debug_assertions)]
-                self.chunk
-                    .disassemble_instruction(&instruction, self.ip - 1);
+                frame
+                    .function
+                    .chunk
+                    .disassemble_instruction(&instruction, frame.ip);
             }
+            frame.ip += 1;
+
             match instruction {
                 Instruction::Add => {
                     let (b, a) = (self.pop(), self.pop());
@@ -97,7 +119,8 @@ impl Vm {
                         _ => {
                             self.push(a);
                             self.push(b);
-                            self.runtime_error(
+                            Vm::runtime_error(
+                                &frame,
                                 "Operands must be numbers or string at the same time.",
                             );
                             return Err(LoxError::RuntimeError);
@@ -105,11 +128,11 @@ impl Vm {
                     }
                 }
                 Instruction::Constant(index) => {
-                    let val = self.chunk.read_constant(index);
+                    let val = frame.function.chunk.read_constant(index);
                     self.stack.push(val);
                 }
                 Instruction::DefineGlobal(index) => {
-                    let s = self.chunk.read_string(index);
+                    let s = frame.function.chunk.read_string(index);
                     let value = self.pop();
                     // no string, only the intern index
                     self.globals.insert(s, value);
@@ -123,33 +146,34 @@ impl Vm {
                 Instruction::False => self.push(Value::Bool(false)),
                 Instruction::GetGlobal(index) => {
                     // just get the intern index
-                    let s = self.chunk.read_string(index);
+                    let s = frame.function.chunk.read_string(index);
                     match self.globals.get(&s) {
                         Some(&value) => self.push(value),
                         None => {
                             let name = self.strings.lookup(s);
                             let msg = format!("Undefined variable '{}'.", name);
-                            self.runtime_error(&msg);
+                            Vm::runtime_error(&frame, &msg);
                             return Err(LoxError::RuntimeError);
                         }
                     }
                 }
                 Instruction::GetLocal(slot) => {
-                    let value = self.stack[slot];
+                    let i = slot + frame.slot;
+                    let value = self.stack[i];
                     self.push(value);
                 }
                 Instruction::Greater => self.binary_op(|a, b| a > b, |n| Value::Bool(n))?,
                 Instruction::Jump(offset) => {
-                    self.jump_forward(offset);
+                    frame.ip += offset as usize;
                 }
                 Instruction::JumpIfFalse(offset) => {
                     if self.peek(0).is_falsy() {
-                        self.jump_forward(offset);
+                        frame.ip += offset as usize;
                     }
                 }
                 Instruction::Less => self.binary_op(|a, b| a < b, |n| Value::Bool(n))?,
                 Instruction::Loop(offset) => {
-                    self.jump_backward(offset);
+                    frame.ip -= offset as usize + 1;
                 }
                 Instruction::Multiply => self.binary_op(|a, b| a * b, |n| Value::Number(n))?,
                 Instruction::Negate => {
@@ -157,7 +181,7 @@ impl Vm {
                         self.pop();
                         self.push(Value::Number(-value));
                     } else {
-                        self.runtime_error("Operand must be a number");
+                        Vm::runtime_error(&frame, "Operand must be a number");
                         return Err(LoxError::RuntimeError);
                     }
                 }
@@ -178,7 +202,7 @@ impl Vm {
                     }
                 }
                 Instruction::SetGlobal(index) => {
-                    let name = self.chunk.read_string(index);
+                    let name = frame.function.chunk.read_string(index);
                     let value = self.peek(0);
                     // means not exist name, so this is an error
                     if let None = self.globals.insert(name, value) {
@@ -186,7 +210,7 @@ impl Vm {
                         self.globals.remove(&name);
                         let s = self.strings.lookup(name);
                         let msg = format!("Undefined variable '{}'.", s);
-                        self.runtime_error(&msg);
+                        Vm::runtime_error(&frame, &msg);
                         return Err(LoxError::RuntimeError);
                     }
                 }
@@ -195,7 +219,8 @@ impl Vm {
                 }
                 Instruction::SetLocal(slot) => {
                     let value = self.peek(0);
-                    self.stack[slot] = value;
+                    let i = slot + frame.slot;
+                    self.stack[i] = value;
                 }
                 Instruction::Substract => self.binary_op(|a, b| a - b, |n| Value::Number(n))?,
                 Instruction::True => self.push(Value::Bool(true)),
@@ -203,15 +228,9 @@ impl Vm {
         }
     }
 
-    fn next_instruction(&mut self) -> Instruction {
-        let instruction = self.chunk.code[self.ip];
-        self.ip += 1;
-        instruction
-    }
-
-    fn runtime_error(&mut self, msg: &str) {
+    fn runtime_error(frame: &CallFrame, msg: &str) {
         eprintln!("{}", msg);
-        let line = self.chunk.lines[self.ip - 1];
+        let line = frame.function.chunk.lines[frame.ip - 1];
         eprintln!("[line {}] in script", line);
     }
 }

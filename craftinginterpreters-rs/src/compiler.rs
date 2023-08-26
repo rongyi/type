@@ -1,12 +1,13 @@
 use crate::{
-    chunk::{Chunk, Instruction, Value},
+    chunk::{Instruction, Value},
     error::LoxError,
+    function::{FunctionType, Functions, LoxFunction},
     scanner::{Scanner, Token, TokenType},
     strings::Strings,
 };
 
 use std::collections::HashMap;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, mem};
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 enum Precedence {
@@ -64,6 +65,7 @@ impl<'a> ParseRule<'a> {
     }
 }
 
+#[derive(Copy, Clone)]
 struct Local<'a> {
     name: Token<'a>,
     depth: i32,
@@ -78,24 +80,40 @@ impl<'a> Local<'a> {
 const LOCAL_COUNT: usize = std::u8::MAX as usize + 1;
 
 struct Compiler<'a> {
+    // chunk move to function
+    enclosing: Option<Box<Compiler<'a>>>,
+    function: LoxFunction,
+    function_type: FunctionType,
     locals: Vec<Local<'a>>,
     scope_depth: i32,
 }
 
 impl<'a> Compiler<'a> {
-    fn new() -> Self {
-        Compiler {
+    fn new(enclosing: Option<Box<Compiler<'a>>>, kind: FunctionType) -> Box<Self> {
+        let mut compiler = Compiler {
+            enclosing,
+            function: LoxFunction::new(),
+            function_type: kind,
             locals: Vec::with_capacity(LOCAL_COUNT),
             scope_depth: 0,
-        }
+        };
+
+        let token = Token {
+            kind: TokenType::Error,
+            lexeme: "",
+            line: 0,
+        };
+        compiler.locals.push(Local::new(token, 0));
+
+        Box::new(compiler)
     }
 }
 
 pub struct Parser<'a> {
     scanner: Scanner<'a>,
-    compiler: Compiler<'a>,
-    chunk: &'a mut Chunk,
+    compiler: Box<Compiler<'a>>,
     strings: &'a mut Strings,
+    functions: &'a mut Functions,
     current: Token<'a>,
     previous: Token<'a>,
     had_error: bool,
@@ -104,7 +122,11 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(code: &'a str, chunk: &'a mut Chunk, strings: &'a mut Strings) -> Parser<'a> {
+    pub fn new(
+        code: &'a str,
+        strings: &'a mut Strings,
+        functions: &'a mut Functions,
+    ) -> Parser<'a> {
         let t1 = Token {
             kind: TokenType::Eof,
             lexeme: "",
@@ -248,9 +270,9 @@ impl<'a> Parser<'a> {
 
         Parser {
             scanner: Scanner::new(code),
-            compiler: Compiler::new(),
-            chunk,
+            compiler: Compiler::new(None, FunctionType::Script),
             strings,
+            functions,
             current: t1,
             previous: t2,
             had_error: false,
@@ -259,7 +281,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn compile(&mut self) -> Result<(), LoxError> {
+    // compile return a function which contain chunk
+    pub fn compile(mut self) -> Result<LoxFunction, LoxError> {
         self.advance();
         while !self.matches(TokenType::Eof) {
             self.declaration();
@@ -268,13 +291,13 @@ impl<'a> Parser<'a> {
 
         #[cfg(debug_assertions)]
         if !self.had_error {
-            self.chunk.disassemble("code");
+            self.compiler.function.chunk.disassemble("code");
         }
 
         if self.had_error {
             Err(LoxError::CompileError)
         } else {
-            Ok(())
+            Ok(self.compiler.function)
         }
     }
 
@@ -289,7 +312,9 @@ impl<'a> Parser<'a> {
     }
 
     fn declaration(&mut self) {
-        if self.matches(TokenType::Var) {
+        if self.matches(TokenType::Fun) {
+            self.fun_declaration();
+        } else if self.matches(TokenType::Var) {
             self.var_declaration();
         } else {
             self.statement();
@@ -298,6 +323,61 @@ impl<'a> Parser<'a> {
         if self.panic_mode {
             self.synchronize();
         }
+    }
+
+    fn fun_declaration(&mut self) {
+        let global = self.parse_variable("Expect function name.");
+        self.mark_initialized();
+        self.function(FunctionType::Function);
+        self.define_variable_global(global);
+    }
+
+    fn push_compiler(&mut self, kind: FunctionType) {
+        let new_compiler = Compiler::new(None, kind);
+        let old_compiler = mem::replace(&mut self.compiler, new_compiler);
+        self.compiler.enclosing = Some(old_compiler);
+        let function_name = self.strings.intern(self.previous.lexeme);
+
+        self.compiler.function.name = function_name;
+    }
+
+    fn pop_compiler(&mut self) -> LoxFunction {
+        self.emit(Instruction::Nil);
+        self.emit(Instruction::Return);
+        match self.compiler.enclosing.take() {
+            Some(enclosing) => {
+                let compiler = mem::replace(&mut self.compiler, enclosing);
+                compiler.function
+            },
+            None => panic!("Didn't find an enclosing compiler")
+        }
+    }
+
+    fn function(&mut self, kind: FunctionType) {
+        self.push_compiler(kind);
+        self.begin_scope();
+        self.consume(TokenType::LeftParen, "Expect '(' after function name.");
+        // fun args
+        if !self.check(TokenType::RightParen) {
+            loop {
+                self.compiler.function.arity += 1;
+                if self.compiler.function.arity > 255 {
+                    self.error_at_current("Cannot have more than 255 parameters.");
+                }
+                let param = self.parse_variable("Expect paramter name.");
+                self.define_variable_global(param);
+                if !self.matches(TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+        // arg end
+        self.consume(TokenType::RightParen, "Expect ')' after parameters.");
+        self.consume(TokenType::LeftBrace, "Expect '{' before function body.");
+        self.block();
+        let function = self.pop_compiler();
+        let fn_id = self.functions.store(function);
+        self.emit_constant(Value::Function(fn_id));
     }
 
     fn var_declaration(&mut self) {
@@ -732,20 +812,23 @@ impl<'a> Parser<'a> {
     }
 
     fn emit(&mut self, instruction: Instruction) -> usize {
-        self.chunk.write(instruction, self.previous.line)
+        self.compiler
+            .function
+            .chunk
+            .write(instruction, self.previous.line)
     }
 
     fn emit_two(&mut self, i1: Instruction, i2: Instruction) -> usize {
-        self.chunk.write(i1, self.previous.line);
-        self.chunk.write(i2, self.previous.line)
+        self.compiler.function.chunk.write(i1, self.previous.line);
+        self.compiler.function.chunk.write(i2, self.previous.line)
     }
     fn start_loop(&self) -> usize {
-        self.chunk.code.len()
+        self.compiler.function.chunk.code.len()
     }
 
     fn emit_loop(&mut self, start_pos: usize) {
         // don't contain the loop instruction
-        let offset = self.chunk.code.len() - start_pos;
+        let offset = self.compiler.function.chunk.code.len() - start_pos;
         let offset = match u16::try_from(offset) {
             Ok(o) => o,
             Err(_) => {
@@ -757,7 +840,7 @@ impl<'a> Parser<'a> {
     }
 
     fn patch_jump(&mut self, pos: usize) {
-        let offset = self.chunk.code.len() - 1 - pos;
+        let offset = self.compiler.function.chunk.code.len() - 1 - pos;
         let offset = match u16::try_from(offset) {
             Ok(offset) => offset,
             Err(_) => {
@@ -766,7 +849,7 @@ impl<'a> Parser<'a> {
             }
         };
 
-        match self.chunk.code[pos] {
+        match self.compiler.function.chunk.code[pos] {
             Instruction::JumpIfFalse(ref mut o) => *o = offset,
             Instruction::Jump(ref mut o) => *o = offset,
             _ => panic!("Instruction at position is not jump"),
@@ -774,10 +857,13 @@ impl<'a> Parser<'a> {
     }
 
     fn make_constant(&mut self, value: Value) -> usize {
-        let index = self.chunk.add_constant(value);
+        let index = self.compiler.function.chunk.add_constant(value);
         let index = match u8::try_from(index) {
             Ok(index) => index,
-            _ => 0,
+            Err(_) => {
+                self.error("Too many constants in one chunk.");
+                0
+            }
         };
         index as usize
     }

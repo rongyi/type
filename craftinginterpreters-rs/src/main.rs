@@ -3,6 +3,7 @@ mod error;
 mod compiler;
 mod scanner;
 mod strings;
+mod function;
 mod vm;
 
 use std::env;

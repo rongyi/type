@@ -1,3 +1,5 @@
+use crate::function::FunctionID;
+use crate::function::LoxFunction;
 use crate::strings::LoxString;
 use std::fmt;
 
@@ -7,13 +9,15 @@ pub enum Value {
     Bool(bool),
     Number(f64),
     String(LoxString),
+    Function(FunctionID),
 }
 
 impl Value {
     pub fn is_falsy(&self) -> bool {
         match self {
-            Value::Nil | Value::Number(_) | Value::String(_) => true,
+            Value::Nil => true,
             Value::Bool(value) => !value,
+            _ => false,
         }
     }
 }
@@ -24,7 +28,8 @@ impl fmt::Display for Value {
             Value::Nil => write!(f, "nil"),
             Value::Bool(value) => write!(f, "{}", value),
             Value::Number(value) => write!(f, "{}", value),
-            Value::String(value) => write!(f, "{}", value),
+            Value::String(value) => write!(f, "<str {}>", value),
+            Value::Function(value) => write!(f, "<fn {}>", value),
         }
     }
 }
