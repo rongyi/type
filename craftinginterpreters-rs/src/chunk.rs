@@ -140,6 +140,7 @@ impl Chunk {
         }
     }
 
+    #[cfg(debug_assertions)]
     fn disassemble_constant(&self, name: &str, index: usize) {
         let value = self.constants[index].clone();
         println!("{:<16} {:4} {}", name, index, value);

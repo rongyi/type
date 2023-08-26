@@ -337,6 +337,8 @@ impl<'a> Parser<'a> {
             self.if_statement();
         } else if self.matches(TokenType::While) {
             self.while_statement();
+        } else if self.matches(TokenType::For) {
+            self.for_statement();
         } else if self.matches(TokenType::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -344,6 +346,54 @@ impl<'a> Parser<'a> {
         } else {
             self.expression_statement();
         }
+    }
+
+    fn for_statement(&mut self) {
+        self.begin_scope();
+        self.consume(TokenType::LeftParen, "Expect '(' after 'for'.");
+
+        // initializer
+        if self.matches(TokenType::Semicolon) {
+            // no initializer
+        } else if self.matches(TokenType::Var) {
+            self.var_declaration();
+        } else {
+            self.expression_statement();
+        }
+        // loop start after initializer
+        let mut loop_start = self.start_loop();
+
+        // condition
+        let mut exit_jump = Option::None;
+        if !self.matches(TokenType::Semicolon) {
+            self.expression();
+            self.consume(TokenType::Semicolon, "Expect ';' after loop condition.");
+            let jump = self.emit(Instruction::JumpIfFalse(0xffff));
+            exit_jump = Option::from(jump);
+            self.emit(Instruction::Pop);
+        }
+
+        // increments
+        if !self.matches(TokenType::RightParen) {
+            let body_jump = self.emit(Instruction::Jump(0xffff));
+            let increment_start = self.start_loop();
+            self.expression();
+            self.emit(Instruction::Pop);
+            self.consume(TokenType::RightParen, "Expect ')' after for clauses.");
+            self.emit_loop(loop_start);
+            // hack loop start and let the jump in body first goto increment
+            // and in increment we chain loop back to start
+            loop_start = increment_start;
+            self.patch_jump(body_jump);
+        }
+
+        self.statement();
+        self.emit_loop(loop_start);
+        if let Option::Some(exit_jump) = exit_jump {
+            self.patch_jump(exit_jump);
+            self.emit(Instruction::Pop);
+        }
+        self.end_scope();
     }
 
     fn while_statement(&mut self) {
