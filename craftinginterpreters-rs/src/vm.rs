@@ -227,9 +227,22 @@ impl Vm {
                         return Err(self.runtime_error(&frame, &msg));
                     }
                 }
+
                 Instruction::Return => {
-                    return Ok(());
+                    let value = state.pop();
+                    match state.frames.pop() {
+                        Some(f) => {
+                            state.stack.truncate(frame.slot);
+                            state.push(value);
+                            frame = f;
+                            chunk = &self.functions.lookup(frame.function).chunk;
+                        }
+                        None => {
+                            return Ok(());
+                        }
+                    }
                 }
+
                 Instruction::SetLocal(slot) => {
                     let value = state.peek(0);
                     let i = slot + frame.slot;
@@ -249,19 +262,34 @@ impl Vm {
         state: &mut ExecutionState,
         arg_count: usize,
     ) -> Result<CallFrame, LoxError> {
-        let callee = state.peek(0);
+        let callee = state.peek(arg_count);
         if let Value::Function(fid) = callee {
-            state.frames.push(frame);
-            Ok(self.call(state, fid, arg_count))
+            self.call(frame, state, fid, arg_count)
         } else {
             Err(self.runtime_error(&frame, "Can only call function and classes."))
         }
     }
 
-    fn call(&self, state: &ExecutionState, fid: FunctionID, arg_count: usize) -> CallFrame {
-        let mut frame = CallFrame::new(fid);
-        frame.slot = state.stack.len() - (arg_count as usize) - 2;
-        frame
+    fn call(
+        &self,
+        frame: CallFrame,
+        state: &mut ExecutionState,
+        fid: FunctionID,
+        arg_count: usize,
+    ) -> Result<CallFrame, LoxError> {
+        let f = self.functions.lookup(fid);
+        if f.arity != arg_count {
+            let msg = format!("Expected {} arguments but got {}.", f.arity, arg_count);
+            Err(self.runtime_error(&frame, &msg))
+        } else if state.frames.len() == MAX_FRAMES {
+            Err(self.runtime_error(&frame, "Stack overflow."))
+        } else {
+            state.frames.push(frame);
+            let mut frame = CallFrame::new(fid);
+            //println!("{} {}", state.stack.len(), arg_count);
+            frame.slot = state.stack.len() - arg_count - 1;
+            Ok(frame)
+        }
     }
 
     fn runtime_error(&self, frame: &CallFrame, msg: &str) -> LoxError {

@@ -146,7 +146,7 @@ impl<'a> Parser<'a> {
             TokenType::LeftParen,
             Some(Parser::grouping),
             Some(Parser::call),
-            Precedence::None,
+            Precedence::Call,
         );
         rule(TokenType::RightParen, None, None, Precedence::None);
         rule(TokenType::LeftBrace, None, None, Precedence::None);
@@ -287,6 +287,7 @@ impl<'a> Parser<'a> {
         while !self.matches(TokenType::Eof) {
             self.declaration();
         }
+        self.emit(Instruction::Nil);
         self.emit(Instruction::Return);
 
         #[cfg(debug_assertions)]
@@ -415,6 +416,8 @@ impl<'a> Parser<'a> {
             self.print_statement();
         } else if self.matches(TokenType::If) {
             self.if_statement();
+        } else if self.matches(TokenType::Return) {
+            self.return_statement();
         } else if self.matches(TokenType::While) {
             self.while_statement();
         } else if self.matches(TokenType::For) {
@@ -488,6 +491,20 @@ impl<'a> Parser<'a> {
         self.emit_loop(loop_start);
         self.patch_jump(exit_jump);
         self.emit(Instruction::Pop);
+    }
+
+    fn return_statement(&mut self) {
+        if let FunctionType::Script = self.compiler.function_type {
+            self.error("Can not return from top-level code.");
+        }
+        if self.matches(TokenType::Semicolon) {
+            self.emit(Instruction::Nil);
+            self.emit(Instruction::Return);
+        } else {
+            self.expression();
+            self.consume(TokenType::Semicolon, "Expect ';' after return value.");
+            self.emit(Instruction::Return);
+        }
     }
 
     fn if_statement(&mut self) {
