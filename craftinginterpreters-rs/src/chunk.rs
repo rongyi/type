@@ -1,4 +1,5 @@
 use crate::function::FunctionID;
+use crate::function::NativeFn;
 use crate::strings::LoxString;
 use std::fmt;
 
@@ -9,6 +10,7 @@ pub enum Value {
     Number(f64),
     String(LoxString),
     Function(FunctionID),
+    NativeFunction(NativeFn),
 }
 
 impl Value {
@@ -29,6 +31,7 @@ impl fmt::Display for Value {
             Value::Number(value) => write!(f, "{}", value),
             Value::String(value) => write!(f, "<str {}>", value),
             Value::Function(value) => write!(f, "<fn {}>", value),
+            Value::NativeFunction(_) => write!(f, "<native fn>"),
         }
     }
 }

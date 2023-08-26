@@ -1,4 +1,6 @@
-use crate::{chunk::Chunk, strings::LoxString};
+use crate::chunk::{Chunk, Value};
+use crate::strings::LoxString;
+use std::fmt;
 
 pub enum FunctionType {
     Function,
@@ -24,6 +26,21 @@ impl LoxFunction {
 #[derive(Default)]
 pub struct Functions {
     functions: Vec<LoxFunction>,
+}
+
+#[derive(Clone, Copy)]
+pub struct NativeFn(pub fn(&[Value]) -> Value);
+
+impl fmt::Debug for NativeFn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<fn>")
+    }
+}
+
+impl PartialEq for NativeFn {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
 }
 
 pub type FunctionID = usize;

@@ -10,10 +10,13 @@ use std::env;
 use std::fs;
 use std::io::{self, Write};
 use std::process;
-use vm::{ExecutionState, Vm};
+use vm::Vm;
+
+#[macro_use]
+extern crate lazy_static;
 
 fn repl(vm: &mut Vm) {
-    let mut state = ExecutionState::new();
+    let mut state = vm.new_state();
     let mut line = String::new();
     loop {
         print!("> ");
@@ -37,7 +40,8 @@ fn run_file(vm: &mut Vm, path: &str) {
             process::exit(74);
         }
     };
-    match vm.interpret(&code, &mut ExecutionState::new()) {
+    let mut state = vm.new_state();
+    match vm.interpret(&code, &mut state) {
         Ok(_) => process::exit(65),
         _ => process::exit(70),
     }

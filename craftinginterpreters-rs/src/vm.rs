@@ -2,9 +2,11 @@ use crate::{
     chunk::{Instruction, Value},
     compiler::Parser,
     error::LoxError,
-    function::{FunctionID, Functions},
+    function::{FunctionID, Functions, NativeFn},
     strings::{LoxString, Strings},
 };
+use cpu_time::ProcessTime;
+use lazy_static::lazy_static;
 use std::collections::HashMap;
 
 struct CallFrame {
@@ -32,13 +34,23 @@ pub struct ExecutionState {
     globals: HashMap<LoxString, Value>,
 }
 
+lazy_static! {
+    static ref BEGIN_OF_PROGRAM: ProcessTime = ProcessTime::now();
+}
+
+fn clock(_arg: &[Value]) -> Value {
+    Value::Number(BEGIN_OF_PROGRAM.elapsed().as_secs_f64())
+}
+
 impl ExecutionState {
-    pub fn new() -> Self {
-        Self {
+    pub fn new(strings: &mut Strings) -> Self {
+        let mut state = Self {
             frames: Vec::with_capacity(MAX_FRAMES),
             stack: Vec::with_capacity(STACK_SIZE),
             globals: HashMap::new(),
-        }
+        };
+        state.define_native(strings, "clock", NativeFn(clock));
+        state
     }
     fn push(&mut self, v: Value) {
         self.stack.push(v);
@@ -50,6 +62,11 @@ impl ExecutionState {
     fn peek(&self, n: usize) -> Value {
         let size = self.stack.len();
         self.stack[size - 1 - n]
+    }
+
+    fn define_native(&mut self, strings: &mut Strings, name: &str, native: NativeFn) {
+        let name_id = strings.intern(name);
+        self.globals.insert(name_id, Value::NativeFunction(native));
     }
 }
 
@@ -64,6 +81,10 @@ impl Vm {
             strings: Strings::default(),
             functions: Functions::default(),
         }
+    }
+
+    pub fn new_state(&mut self) -> ExecutionState {
+        ExecutionState::new(&mut self.strings)
     }
 
     pub fn interpret(&mut self, code: &str, state: &mut ExecutionState) -> Result<(), LoxError> {
@@ -263,10 +284,15 @@ impl Vm {
         arg_count: usize,
     ) -> Result<CallFrame, LoxError> {
         let callee = state.peek(arg_count);
-        if let Value::Function(fid) = callee {
-            self.call(frame, state, fid, arg_count)
-        } else {
-            Err(self.runtime_error(&frame, "Can only call function and classes."))
+        match callee {
+            Value::Function(fid) => self.call(frame, state, fid, arg_count),
+            Value::NativeFunction(native) => {
+                let left = state.stack.len() - arg_count;
+                let result = native.0(&state.stack[left..]);
+                state.push(result);
+                Ok(frame)
+            }
+            _ => Err(self.runtime_error(&frame, "Can only call function and classes.")),
         }
     }
 
