@@ -1,3 +1,4 @@
+use crate::closure::ClosureID;
 use crate::function::FunctionID;
 use crate::function::NativeFn;
 use crate::strings::LoxString;
@@ -10,6 +11,7 @@ pub enum Value {
     Number(f64),
     String(LoxString),
     Function(FunctionID),
+    Closure(ClosureID),
     NativeFunction(NativeFn),
 }
 
@@ -31,6 +33,7 @@ impl fmt::Display for Value {
             Value::Number(value) => write!(f, "{}", value),
             Value::String(value) => write!(f, "<str {}>", value),
             Value::Function(value) => write!(f, "<fn {}>", value),
+            Value::Closure(value) => write!(f, "<fn {}>", value),
             Value::NativeFunction(_) => write!(f, "<native fn>"),
         }
     }
@@ -40,6 +43,7 @@ impl fmt::Display for Value {
 pub enum Instruction {
     Add,
     Call(usize),
+    Closure(usize),
     Constant(usize),
     DefineGlobal(usize),
     Divide,
@@ -65,6 +69,7 @@ pub enum Instruction {
     True,
 }
 
+#[derive(Default)]
 pub struct Chunk {
     pub code: Vec<Instruction>,
     pub constants: Vec<Value>,
@@ -72,14 +77,6 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    pub fn new() -> Self {
-        Self {
-            code: Vec::new(),
-            constants: Vec::new(),
-            lines: Vec::new(),
-        }
-    }
-
     pub fn write(&mut self, instruction: Instruction, line: usize) -> usize {
         self.code.push(instruction);
         self.lines.push(line);
@@ -121,8 +118,9 @@ impl Chunk {
             print!("{:>4} ", line);
         }
         match instruction {
-            Instruction::Constant(index) => self.disassemble_constant("OP_CONSTANT", *index),
             Instruction::Add => println!("OP_ADD"),
+            Instruction::Closure(_i) => println!("OP_CLOSURE"),
+            Instruction::Constant(index) => self.disassemble_constant("OP_CONSTANT", *index),
             Instruction::Call(i) => println!("OP_CALL {}", i),
             Instruction::DefineGlobal(i) => self.disassemble_constant("OP_DEFINE_GLOBAL", *i),
             Instruction::Divide => println!("OP_DIVIDE"),

@@ -1,5 +1,6 @@
 use crate::{
     chunk::{Instruction, Value},
+    closure::{Closure, ClosureID, Closures},
     compiler::Parser,
     error::LoxError,
     function::{FunctionID, Functions, NativeFn},
@@ -11,14 +12,16 @@ use std::collections::HashMap;
 
 struct CallFrame {
     function: FunctionID,
+    closure: ClosureID,
     ip: usize,
     slot: usize, // what's this? base?
 }
 
 impl CallFrame {
-    fn new(function: FunctionID) -> Self {
+    fn new(function: FunctionID, closure: ClosureID) -> Self {
         CallFrame {
             function,
+            closure,
             ip: 0,
             slot: 0,
         }
@@ -32,6 +35,7 @@ pub struct ExecutionState {
     frames: Vec<CallFrame>,
     stack: Vec<Value>,
     globals: HashMap<LoxString, Value>,
+    closures: Closures,
 }
 
 lazy_static! {
@@ -48,6 +52,7 @@ impl ExecutionState {
             frames: Vec::with_capacity(MAX_FRAMES),
             stack: Vec::with_capacity(STACK_SIZE),
             globals: HashMap::new(),
+            closures: Closures::default(),
         };
         state.define_native(strings, "clock", NativeFn(clock));
         state
@@ -70,19 +75,13 @@ impl ExecutionState {
     }
 }
 
+#[derive(Default)]
 pub struct Vm {
     strings: Strings,
     functions: Functions,
 }
 
 impl Vm {
-    pub fn new() -> Self {
-        Self {
-            strings: Strings::default(),
-            functions: Functions::default(),
-        }
-    }
-
     pub fn new_state(&mut self) -> ExecutionState {
         ExecutionState::new(&mut self.strings)
     }
@@ -90,7 +89,9 @@ impl Vm {
     pub fn interpret(&mut self, code: &str, state: &mut ExecutionState) -> Result<(), LoxError> {
         let parser = Parser::new(code, &mut self.strings, &mut self.functions);
         let function = parser.compile()?;
-        state.frames.push(CallFrame::new(function));
+        let closure = Closure::new(function);
+        let closure_id = state.closures.store(closure);
+        state.frames.push(CallFrame::new(function, closure_id));
         self.run(state)
     }
 
@@ -113,7 +114,8 @@ impl Vm {
 
     fn run(&mut self, state: &mut ExecutionState) -> Result<(), LoxError> {
         let mut frame = state.frames.pop().unwrap();
-        let mut chunk = &self.functions.lookup(frame.function).chunk;
+        let closure = state.closures.lookup(frame.closure);
+        let mut chunk = &self.functions.lookup(closure.function).chunk;
         loop {
             let instruction = chunk.code[frame.ip];
             #[cfg(debug_assertions)]
@@ -150,6 +152,14 @@ impl Vm {
                                 "Operands must be numbers or string at the same time.",
                             ));
                         }
+                    }
+                }
+                Instruction::Closure(index) => {
+                    let c = chunk.read_constant(index);
+                    if let Value::Function(function_id) = c {
+                        let closure = Closure::new(function_id);
+                        let closure_id = state.closures.store(closure);
+                        state.push(Value::Closure(closure_id));
                     }
                 }
                 Instruction::Call(arg_count) => {
@@ -285,7 +295,7 @@ impl Vm {
     ) -> Result<CallFrame, LoxError> {
         let callee = state.peek(arg_count);
         match callee {
-            Value::Function(fid) => self.call(frame, state, fid, arg_count),
+            Value::Closure(cid) => self.call(frame, state, cid, arg_count),
             Value::NativeFunction(native) => {
                 let left = state.stack.len() - arg_count;
                 let result = native.0(&state.stack[left..]);
@@ -300,10 +310,11 @@ impl Vm {
         &self,
         frame: CallFrame,
         state: &mut ExecutionState,
-        fid: FunctionID,
+        cid: ClosureID,
         arg_count: usize,
     ) -> Result<CallFrame, LoxError> {
-        let f = self.functions.lookup(fid);
+        let closure = state.closures.lookup(cid);
+        let f = self.functions.lookup(closure.function);
         if f.arity != arg_count {
             let msg = format!("Expected {} arguments but got {}.", f.arity, arg_count);
             Err(self.runtime_error(&frame, &msg))
@@ -311,7 +322,7 @@ impl Vm {
             Err(self.runtime_error(&frame, "Stack overflow."))
         } else {
             state.frames.push(frame);
-            let mut frame = CallFrame::new(fid);
+            let mut frame = CallFrame::new(closure.function, cid);
             //println!("{} {}", state.stack.len(), arg_count);
             frame.slot = state.stack.len() - arg_count - 1;
             Ok(frame)

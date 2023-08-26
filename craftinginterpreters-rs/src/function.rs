@@ -7,20 +7,11 @@ pub enum FunctionType {
     Script,
 }
 
+#[derive(Default)]
 pub struct LoxFunction {
     pub arity: usize,
     pub chunk: Chunk,
     pub name: LoxString,
-}
-
-impl LoxFunction {
-    pub fn new() -> Self {
-        Self {
-            arity: 0,
-            chunk: Chunk::new(),
-            name: 0,
-        }
-    }
 }
 
 #[derive(Default)]

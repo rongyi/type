@@ -92,7 +92,7 @@ impl<'a> Compiler<'a> {
     fn new(enclosing: Option<Box<Compiler<'a>>>, kind: FunctionType) -> Box<Self> {
         let mut compiler = Compiler {
             enclosing,
-            function: LoxFunction::new(),
+            function: LoxFunction::default(),
             function_type: kind,
             locals: Vec::with_capacity(LOCAL_COUNT),
             scope_depth: 0,
@@ -378,7 +378,8 @@ impl<'a> Parser<'a> {
         self.block();
         let function = self.pop_compiler();
         let fn_id = self.functions.store(function);
-        self.emit_constant(Value::Function(fn_id));
+        let index = self.make_constant(Value::Function(fn_id));
+        self.emit(Instruction::Closure(index));
     }
 
     fn var_declaration(&mut self) {
