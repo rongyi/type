@@ -486,6 +486,52 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn return_statement(&mut self) {
+        if let FunctionType::Script = self.compiler.function_type {
+            self.error("Can not return from top-level code.");
+        }
+        if self.matches(TokenType::Semicolon) {
+            self.emit(Instruction::Nil);
+            self.emit(Instruction::Return);
+        } else {
+            self.expression();
+            self.consume(TokenType::Semicolon, "Expect ';' after return value.");
+            self.emit(Instruction::Return);
+        }
+    }
+
+
+    fn if_statement(&mut self) {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.");
+        self.expression();
+        self.consume(TokenType::RightParen, "Expect ')' after condition.");
+        let then_jump = self.emit(Instruction::JumpIfFalse(0xffff));
+        self.emit(Instruction::Pop);
+        self.statement();
+        let else_jump = self.emit(Instruction::Jump(0xffff));
+        self.patch_jump(then_jump);
+        self.emit(Instruction::Pop);
+        if self.matches(TokenType::Else) {
+            self.statement();
+        }
+        self.patch_jump(else_jump);
+    }
+
+    fn while_statement(&mut self) {
+        let loop_start = self.start_loop();
+        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.");
+        self.expression();
+        self.consume(TokenType::RightParen, "Expect ')' after condition");
+        // guard
+        let exit_jump = self.emit(Instruction::JumpIfFalse(0xffff));
+        self.emit(Instruction::Pop);
+        self.statement();
+        self.emit_loop(loop_start);
+        self.patch_jump(exit_jump);
+        self.emit(Instruction::Pop);
+    }
+
+
     fn for_statement(&mut self) {
         self.begin_scope();
         self.consume(TokenType::LeftParen, "Expect '(' after 'for'.");
@@ -534,49 +580,9 @@ impl<'a> Parser<'a> {
         self.end_scope();
     }
 
-    fn while_statement(&mut self) {
-        let loop_start = self.start_loop();
-        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.");
-        self.expression();
-        self.consume(TokenType::RightParen, "Expect ')' after condition");
-        // guard
-        let exit_jump = self.emit(Instruction::JumpIfFalse(0xffff));
-        self.emit(Instruction::Pop);
-        self.statement();
-        self.emit_loop(loop_start);
-        self.patch_jump(exit_jump);
-        self.emit(Instruction::Pop);
-    }
 
-    fn return_statement(&mut self) {
-        if let FunctionType::Script = self.compiler.function_type {
-            self.error("Can not return from top-level code.");
-        }
-        if self.matches(TokenType::Semicolon) {
-            self.emit(Instruction::Nil);
-            self.emit(Instruction::Return);
-        } else {
-            self.expression();
-            self.consume(TokenType::Semicolon, "Expect ';' after return value.");
-            self.emit(Instruction::Return);
-        }
-    }
 
-    fn if_statement(&mut self) {
-        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.");
-        self.expression();
-        self.consume(TokenType::RightParen, "Expect ')' after condition.");
-        let then_jump = self.emit(Instruction::JumpIfFalse(0xffff));
-        self.emit(Instruction::Pop);
-        self.statement();
-        let else_jump = self.emit(Instruction::Jump(0xffff));
-        self.patch_jump(then_jump);
-        self.emit(Instruction::Pop);
-        if self.matches(TokenType::Else) {
-            self.statement();
-        }
-        self.patch_jump(else_jump);
-    }
+
 
     fn begin_scope(&mut self) {
         self.compiler.scope_depth += 1;
@@ -607,7 +613,7 @@ impl<'a> Parser<'a> {
 
     fn print_statement(&mut self) {
         self.expression();
-        self.consume(TokenType::Semicolon, "Expect ';' after value");
+        self.consume(TokenType::Semicolon, "Expect ';' after value.");
         self.emit(Instruction::Print);
     }
 
@@ -620,18 +626,7 @@ impl<'a> Parser<'a> {
         self.emit_constant(Value::Number(value));
     }
 
-    fn matches(&mut self, kind: TokenType) -> bool {
-        if !self.check(kind) {
-            false
-        } else {
-            self.advance();
-            true
-        }
-    }
 
-    fn check(&self, kind: TokenType) -> bool {
-        self.current.kind == kind
-    }
 
     fn string(&mut self, _can_assign: bool) {
         let lexeme = self.previous.lexeme;
@@ -728,7 +723,7 @@ impl<'a> Parser<'a> {
 
     fn grouping(&mut self, _can_assign: bool) {
         self.expression();
-        self.consume(TokenType::RightParen, "Expect ')' after expression.")
+        self.consume(TokenType::RightParen, "Expect ')' after expression.");
     }
 
     fn unary(&mut self, _can_assign: bool) {
@@ -881,6 +876,19 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
+    }
+
+    fn matches(&mut self, kind: TokenType) -> bool {
+        if !self.check(kind) {
+            false
+        } else {
+            self.advance();
+            true
+        }
+    }
+
+    fn check(&self, kind: TokenType) -> bool {
+        self.current.kind == kind
     }
 
     fn error_at_current(&mut self, msg: &str) {

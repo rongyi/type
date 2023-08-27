@@ -44,7 +44,7 @@ lazy_static! {
     static ref BEGIN_OF_PROGRAM: ProcessTime = ProcessTime::now();
 }
 
-fn clock(_arg: &[Value]) -> Value {
+fn clock(_args: &[Value]) -> Value {
     Value::Number(BEGIN_OF_PROGRAM.elapsed().as_secs_f64())
 }
 
@@ -280,18 +280,7 @@ impl Vm {
                         println!("{}", value);
                     }
                 }
-                Instruction::SetGlobal(index) => {
-                    let name = chunk.read_string(index);
-                    let value = state.peek(0);
-                    // means not exist name, so this is an error
-                    if let None = state.globals.insert(name, value) {
-                        // delete
-                        state.globals.remove(&name);
-                        let s = self.strings.lookup(name);
-                        let msg = format!("Undefined variable '{}'.", s);
-                        return Err(self.runtime_error(&frame, &msg));
-                    }
-                }
+
 
                 Instruction::Return => {
                     let value = state.pop();
@@ -308,7 +297,18 @@ impl Vm {
                         }
                     }
                 }
-
+                Instruction::SetGlobal(index) => {
+                    let name = chunk.read_string(index);
+                    let value = state.peek(0);
+                    // means not exist name, so this is an error
+                    if let None = state.globals.insert(name, value) {
+                        // delete
+                        state.globals.remove(&name);
+                        let s = self.strings.lookup(name);
+                        let msg = format!("Undefined variable '{}'.", s);
+                        return Err(self.runtime_error(&frame, &msg));
+                    }
+                }
                 Instruction::SetLocal(slot) => {
                     let value = state.peek(0);
                     let i = slot + frame.slot;
