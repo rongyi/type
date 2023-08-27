@@ -1,6 +1,6 @@
 use crate::{
     chunk::{Instruction, Value},
-    closure::{Closure, ClosureID, Closures},
+    closure::{Closure, ClosureID, Closures, ObjUpvalue},
     compiler::Parser,
     error::LoxError,
     function::{FunctionID, Functions, NativeFn},
@@ -8,7 +8,8 @@ use crate::{
 };
 use cpu_time::ProcessTime;
 use lazy_static::lazy_static;
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::{collections::HashMap, rc::Rc};
 
 struct CallFrame {
     function: FunctionID,
@@ -36,6 +37,7 @@ pub struct ExecutionState {
     stack: Vec<Value>,
     globals: HashMap<LoxString, Value>,
     closures: Closures,
+    open_upvalues: Vec<Rc<RefCell<ObjUpvalue>>>,
 }
 
 lazy_static! {
@@ -53,6 +55,7 @@ impl ExecutionState {
             stack: Vec::with_capacity(STACK_SIZE),
             globals: HashMap::new(),
             closures: Closures::default(),
+            open_upvalues: Vec::with_capacity(STACK_SIZE),
         };
         state.define_native(strings, "clock", NativeFn(clock));
         state
@@ -114,8 +117,10 @@ impl Vm {
 
     fn run(&mut self, state: &mut ExecutionState) -> Result<(), LoxError> {
         let mut frame = state.frames.pop().unwrap();
-        let closure = state.closures.lookup(frame.closure);
-        let mut chunk = &self.functions.lookup(closure.function).chunk;
+        let mut chunk = {
+            let closure = state.closures.lookup(frame.closure);
+            &self.functions.lookup(closure.function).chunk
+        };
         loop {
             let instruction = chunk.code[frame.ip];
             #[cfg(debug_assertions)]
@@ -154,11 +159,28 @@ impl Vm {
                         }
                     }
                 }
+                Instruction::CloseUpvalue => {
+                    let stack_top = state.stack.len() - 1;
+                    self.close_upvalues(state, stack_top);
+                    state.pop();
+                }
                 Instruction::Closure(index) => {
                     let c = chunk.read_constant(index);
                     if let Value::Function(function_id) = c {
-                        let closure = Closure::new(function_id);
-                        let closure_id = state.closures.store(closure);
+                        let function = self.functions.lookup(function_id);
+                        let mut new_closure = Closure::new(function_id);
+
+                        for upvalue in function.upvalues.iter() {
+                            let obj_upvalue = if upvalue.is_local {
+                                self.capture_value(state, frame.slot + upvalue.index)
+                            } else {
+                                let current_closure = state.closures.lookup(frame.closure);
+                                current_closure.upvalues[upvalue.index].clone()
+                            };
+                            new_closure.upvalues.push(obj_upvalue);
+                        }
+
+                        let closure_id = state.closures.store(new_closure);
                         state.push(Value::Closure(closure_id));
                     }
                 }
@@ -200,6 +222,18 @@ impl Vm {
                 Instruction::GetLocal(slot) => {
                     let i = slot + frame.slot;
                     let value = state.stack[i];
+                    state.push(value);
+                }
+                Instruction::GetUpvalue(slot) => {
+                    let value = {
+                        let current_closure = state.closures.lookup(frame.closure);
+                        let upvalue = current_closure.upvalues[slot].borrow();
+                        if let Some(value) = upvalue.closed {
+                            value
+                        } else {
+                            state.stack[upvalue.location]
+                        }
+                    };
                     state.push(value);
                 }
                 Instruction::Greater => {
@@ -261,6 +295,7 @@ impl Vm {
 
                 Instruction::Return => {
                     let value = state.pop();
+                    self.close_upvalues(state, frame.slot);
                     match state.frames.pop() {
                         Some(f) => {
                             state.stack.truncate(frame.slot);
@@ -279,12 +314,51 @@ impl Vm {
                     let i = slot + frame.slot;
                     state.stack[i] = value;
                 }
+                Instruction::SetUpvalue(slot) => {
+                    let current_closure = state.closures.lookup(frame.closure);
+                    let mut upvalue = current_closure.upvalues[slot].borrow_mut();
+                    let value = state.peek(0);
+                    if let None = upvalue.closed {
+                        state.stack[upvalue.location] = value;
+                    } else {
+                        upvalue.closed = Some(value);
+                    }
+                }
                 Instruction::Substract => {
                     self.binary_op(&frame, state, |a, b| a - b, |n| Value::Number(n))?
                 }
                 Instruction::True => state.push(Value::Bool(true)),
             }
         }
+    }
+
+    fn close_upvalues(&self, state: &mut ExecutionState, last: usize) {
+        let mut i = 0;
+        while i != state.open_upvalues.len() {
+            if state.open_upvalues[i].borrow().location >= last {
+                let upvalue = state.open_upvalues.remove(i);
+                let location = upvalue.borrow().location;
+                upvalue.borrow_mut().closed = Some(state.stack[location]);
+            } else {
+                i += 1;
+            }
+        }
+    }
+
+    fn capture_value(
+        &self,
+        state: &mut ExecutionState,
+        location: usize,
+    ) -> Rc<RefCell<ObjUpvalue>> {
+        for upvalue in state.open_upvalues.iter() {
+            if upvalue.borrow().location == location {
+                return Rc::clone(upvalue);
+            }
+        }
+        let upvalue = ObjUpvalue::new(location);
+        let upvalue = Rc::new(RefCell::new(upvalue));
+        state.open_upvalues.push(Rc::clone(&upvalue));
+        upvalue
     }
 
     fn call_value(

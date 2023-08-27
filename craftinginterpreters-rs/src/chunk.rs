@@ -43,6 +43,7 @@ impl fmt::Display for Value {
 pub enum Instruction {
     Add,
     Call(usize),
+    CloseUpvalue,
     Closure(usize),
     Constant(usize),
     DefineGlobal(usize),
@@ -50,6 +51,7 @@ pub enum Instruction {
     Equal,
     False,
     GetLocal(usize),
+    GetUpvalue(usize),
     GetGlobal(usize),
     Greater,
     Jump(u16),
@@ -64,6 +66,7 @@ pub enum Instruction {
     Print,
     Return,
     SetLocal(usize),
+    SetUpvalue(usize),
     SetGlobal(usize),
     Substract,
     True,
@@ -119,6 +122,7 @@ impl Chunk {
         }
         match instruction {
             Instruction::Add => println!("OP_ADD"),
+            Instruction::CloseUpvalue => println!("OP_CLOSE_UPVALUE"),
             Instruction::Closure(_i) => println!("OP_CLOSURE"),
             Instruction::Constant(index) => self.disassemble_constant("OP_CONSTANT", *index),
             Instruction::Call(i) => println!("OP_CALL {}", i),
@@ -128,6 +132,7 @@ impl Chunk {
             Instruction::False => println!("OP_FALSE"),
             Instruction::GetGlobal(i) => self.disassemble_constant("OP_GET_GLOBAL", *i),
             Instruction::GetLocal(i) => self.disassemble_constant("OP_GET_LOCAL", *i),
+            Instruction::GetUpvalue(i) => println!("OP_GET_UPVALUE {}", i),
             Instruction::Greater => println!("OP_GREATER"),
             Instruction::Jump(offset) => println!("OP_JUMP {}", offset),
             Instruction::JumpIfFalse(offset) => println!("OP_JUMP_IF_FALSE {}", offset),
@@ -142,6 +147,7 @@ impl Chunk {
             Instruction::Return => println!("OP_RETURN"),
             Instruction::SetGlobal(i) => self.disassemble_constant("OP_SET_GLOBAL", *i),
             Instruction::SetLocal(i) => self.disassemble_constant("OP_SET_LOCAL", *i),
+            Instruction::SetUpvalue(i) => println!("OP_SET_UPVALUE {}", i),
             Instruction::Substract => println!("OP_SUBSTRACT"),
             Instruction::True => println!("OP_TRUE"),
         }

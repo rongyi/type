@@ -1,7 +1,7 @@
 use crate::{
     chunk::{Instruction, Value},
     error::LoxError,
-    function::{FunctionID, FunctionType, Functions, LoxFunction},
+    function::{FunctionID, FunctionType, Functions, LoxFunction, Upvalue},
     scanner::{Scanner, Token, TokenType},
     strings::Strings,
 };
@@ -69,22 +69,29 @@ impl<'a> ParseRule<'a> {
 struct Local<'a> {
     name: Token<'a>,
     depth: i32,
+    is_captured: bool,
 }
 
 impl<'a> Local<'a> {
     fn new(name: Token<'a>, depth: i32) -> Self {
-        Self { name, depth }
+        Self {
+            name,
+            depth,
+            is_captured: false,
+        }
     }
 }
 
 const LOCAL_COUNT: usize = std::u8::MAX as usize + 1;
 
+// so fucking ugly name
 struct Compiler<'a> {
     // chunk move to function
     enclosing: Option<Box<Compiler<'a>>>,
     function: LoxFunction,
     function_type: FunctionType,
     locals: Vec<Local<'a>>,
+    errors: Vec<&'static str>,
     scope_depth: i32,
 }
 
@@ -95,6 +102,7 @@ impl<'a> Compiler<'a> {
             function: LoxFunction::default(),
             function_type: kind,
             locals: Vec::with_capacity(LOCAL_COUNT),
+            errors: Vec::with_capacity(LOCAL_COUNT),
             scope_depth: 0,
         };
 
@@ -106,6 +114,49 @@ impl<'a> Compiler<'a> {
         compiler.locals.push(Local::new(token, 0));
 
         Box::new(compiler)
+    }
+
+    fn resolve_local(&mut self, name: Token) -> Option<usize> {
+        for (i, local) in self.locals.iter().enumerate().rev() {
+            if name.lexeme == local.name.lexeme {
+                if local.depth == -1 {
+                    self.errors
+                        .push("Cannot read local variable in its own initializer.");
+                }
+                return Some(i);
+            }
+        }
+
+        None
+    }
+
+    fn resolve_upvalue(&mut self, name: Token) -> Option<usize> {
+        if let Some(enclosing) = self.enclosing.as_mut() {
+            if let Some(index) = enclosing.resolve_local(name) {
+                enclosing.locals[index].is_captured = true;
+                return Some(self.add_upvalue(index, true));
+            }
+            if let Some(index) = enclosing.resolve_upvalue(name) {
+                return Some(self.add_upvalue(index, false));
+            }
+        }
+        None
+    }
+
+    fn add_upvalue(&mut self, index: usize, is_local: bool) -> usize {
+        for (i, upvalue) in self.function.upvalues.iter().enumerate() {
+            if upvalue.index == index && upvalue.is_local == is_local {
+                return i;
+            }
+        }
+        let count = self.function.upvalues.len();
+        if count == LOCAL_COUNT {
+            self.errors.push("Too many closure variables in function.");
+            return 0;
+        }
+        let upvalue = Upvalue { index, is_local };
+        self.function.upvalues.push(upvalue);
+        count
     }
 }
 
@@ -365,7 +416,7 @@ impl<'a> Parser<'a> {
                 if self.compiler.function.arity > 255 {
                     self.error_at_current("Cannot have more than 255 parameters.");
                 }
-                let param = self.parse_variable("Expect paramter name.");
+                let param = self.parse_variable("Expect parameter name.");
                 self.define_variable_global(param);
                 if !self.matches(TokenType::Comma) {
                     break;
@@ -408,6 +459,9 @@ impl<'a> Parser<'a> {
     }
 
     fn mark_initialized(&mut self) {
+        if self.compiler.scope_depth == 0 {
+            return;
+        }
         let last_local = self.compiler.locals.last_mut().unwrap();
         last_local.depth = self.compiler.scope_depth;
     }
@@ -533,7 +587,11 @@ impl<'a> Parser<'a> {
 
         for i in (0..self.compiler.locals.len()).rev() {
             if self.compiler.locals[i].depth > self.compiler.scope_depth {
-                self.emit(Instruction::Pop);
+                if self.compiler.locals[i].is_captured {
+                    self.emit(Instruction::CloseUpvalue);
+                } else {
+                    self.emit(Instruction::Pop);
+                }
                 self.compiler.locals.pop();
             }
         }
@@ -598,10 +656,16 @@ impl<'a> Parser<'a> {
     fn named_variable(&mut self, name: Token, can_assign: bool) {
         let get_op;
         let set_op;
+        // local
         if let Some(arg) = self.resolve_local(name) {
             get_op = Instruction::GetLocal(arg);
             set_op = Instruction::SetLocal(arg);
+        } else if let Some(arg) = self.resolve_upvalue(name) {
+            // closure
+            get_op = Instruction::GetUpvalue(arg);
+            set_op = Instruction::SetUpvalue(arg);
         } else {
+            // consider global
             let index = self.identifier_constant(name);
             get_op = Instruction::GetGlobal(index);
             set_op = Instruction::SetGlobal(index);
@@ -616,15 +680,25 @@ impl<'a> Parser<'a> {
     }
 
     fn resolve_local(&mut self, name: Token) -> Option<usize> {
-        for (i, local) in self.compiler.locals.iter().enumerate().rev() {
-            if name.lexeme == local.name.lexeme {
-                if local.depth == -1 {
-                    self.error("Can not read local variable in its own initializer.");
-                }
-                return Option::from(i);
+        let result = self.compiler.resolve_local(name);
+        loop {
+            match self.compiler.errors.pop() {
+                Some(error) => self.error(error),
+                None => break,
             }
         }
-        None
+        result
+    }
+
+    fn resolve_upvalue(&mut self, name: Token) -> Option<usize> {
+        let result = self.compiler.resolve_upvalue(name);
+        loop {
+            match self.compiler.errors.pop() {
+                Some(error) => self.error(error),
+                None => break,
+            }
+        }
+        result
     }
 
     fn call(&mut self, _can_assign: bool) {
@@ -759,7 +833,7 @@ impl<'a> Parser<'a> {
         }
         let name = self.previous;
         if self.is_local_declared(name) {
-            self.error("Variable with this name already delared in this scope.");
+            self.error("Variable with this name already declared in this scope.");
         }
         self.add_local(name);
     }
@@ -777,7 +851,7 @@ impl<'a> Parser<'a> {
     }
     fn add_local(&mut self, token: Token<'a>) {
         if self.compiler.locals.len() == LOCAL_COUNT {
-            self.error("Too many local variable in function.");
+            self.error("Too many local variables in function.");
             return;
         }
         let local = Local::new(token, -1);

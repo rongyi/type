@@ -13,7 +13,6 @@ use std::io::{self, Write};
 use std::process;
 use vm::Vm;
 
-#[macro_use]
 extern crate lazy_static;
 
 fn repl(vm: &mut Vm) {

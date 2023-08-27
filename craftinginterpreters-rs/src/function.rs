@@ -12,6 +12,7 @@ pub struct LoxFunction {
     pub arity: usize,
     pub chunk: Chunk,
     pub name: LoxString,
+    pub upvalues: Vec<Upvalue>,
 }
 
 #[derive(Default)]
@@ -35,6 +36,11 @@ impl PartialEq for NativeFn {
 }
 
 pub type FunctionID = usize;
+
+pub struct Upvalue {
+    pub index: usize,
+    pub is_local: bool,
+}
 
 impl Functions {
     pub fn lookup(&self, id: FunctionID) -> &LoxFunction {
