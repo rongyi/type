@@ -4,3 +4,4 @@ craftinginterpreters/*.o
 craftinginterpreters/a.out
 craftinginterpreters/aa.txt
 craftinginterpreters-rs/target/*
+grokking-coding-interview/a.out
