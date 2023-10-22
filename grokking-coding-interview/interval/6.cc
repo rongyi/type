@@ -31,12 +31,12 @@ class MaxLoad {
     int max_load = 0;
     int cur_load = 0;
     for (auto &m : jobs) {
-      // shrink all unessary rooms
+      // job no overlap should go out and shrink load accordingly
       while (!pq.empty() && pq.top().first <= m.start_) {
         cur_load -= pq.top().second;
         pq.pop();
       }
-      // use one room
+      // add one job
       pq.push({m.end_, m.weight_});
       cur_load += m.weight_;
       max_load = max(max_load, cur_load);
