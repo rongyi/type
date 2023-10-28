@@ -65,26 +65,7 @@ void update_inventory() {
   int id1 = gun_bullet[main_weapon];
   int id2 = gun_bullet[sec_weapon];
   int delete_id = -1;
-  while (cur_sz + need_space > pack_sz) {
-    for (int i = 14; i <= 16; i++) {
-      if (package[i].first == 0 || i == id1 || id == id2) {
-        continue;
-      }
-      if (package[i].second < cur_ts) {
-        cur_ts = package[i].second;
-        delete_id = i;
-      }
-    }
-    if (cur_ts == numeric_limits<int>::max()) {
-      break;
-    }
-    cur_ts = numeric_limits<int>::max();
-    int drop_num = (cur_sz + need_space - pack_sz + space_unit[delete_id] - 1) /
-                   space_unit[delete_id];
-    drop_num = min(drop_num, package[delete_id].first);
-    cur_sz -= drop_num * space_unit[delete_id];
-    package[delete_id].first -= drop_num;
-  }
+
   vector<int> ids(17, 0);
   iota(ids.begin(), ids.end(), 0);
   sort(ids.begin(), ids.end(),
@@ -93,7 +74,7 @@ void update_inventory() {
     if (cur_sz + need_space <= pack_sz) {
       break;
     }
-    if (package[id].first == 0) {
+    if (package[id].first == 0 || id == id1 || id == id2) {
       continue;
     }
     int drop_num =
@@ -102,20 +83,37 @@ void update_inventory() {
     cur_sz -= drop_num * space_unit[id];
     package[id].first -= drop_num;
   }
+
+  if (cur_sz + need_space > pack_sz) {
+    for (auto &id : ids) {
+      if (cur_sz + need_space <= pack_sz) {
+        break;
+      }
+      if (package[id].first == 0) {
+        continue;
+      }
+      int drop_num =
+          (cur_sz + need_space - pack_sz + space_unit[id] - 1) / space_unit[id];
+      drop_num = min(drop_num, package[id].first);
+      cur_sz -= drop_num * space_unit[id];
+      package[id].first -= drop_num;
+    }
+  }
+
   cur_sz += need_space;
   package[id].first += num;
   package[id].second = timestamp;
 }
 
 void fight() {
-  int havea = package[main_weapon].first;
-  int haveb = package[sec_weapon].first;
+  int havea = package[gun_bullet[main_weapon]].first;
+  int haveb = package[gun_bullet[sec_weapon]].first;
 
   if (havea >= grid[x][y][1]) {
-    package[main_weapon].first -= grid[x][y][1];
+    package[gun_bullet[main_weapon]].first -= grid[x][y][1];
     cur_sz -= space_unit[gun_bullet[main_weapon]] * grid[x][y][1];
   } else if (haveb >= grid[x][y][2]) {
-    package[sec_weapon].first -= grid[x][y][2];
+    package[gun_bullet[sec_weapon]].first -= grid[x][y][2];
     cur_sz -= space_unit[gun_bullet[sec_weapon]] * grid[x][y][2];
   } else {
     ko = 1;
@@ -191,6 +189,4 @@ int main() {
       }
     }
   }
-
-  // action
 }
