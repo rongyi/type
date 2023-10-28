@@ -61,53 +61,41 @@ void update_inventory() {
     package[grid[x][y][0]].second = timestamp;
     return;
   }
-
-  int flag1 = 1;
-  int not_found = 0;
-  int min_ts = 1e9;
-  int del_id = 0;
-  while (cur_sz + need_space > pack_sz) {
-    if (flag1) {
-      not_found = true;
-      min_ts = 1e9;
-      for (int i = 14; i <= 16; i++) {
-        if (package[i].first && i != id1 && i != id2) {
-          if (package[i].second < min_ts) {
-            min_ts = package[i].second;
-            del_id = i;
-            not_found = false;
-          }
-        }
-      }
-      if (not_found) {
-        flag1 = 0;
-        continue;
-      }
-      int drop_num = (cur_sz + need_space - pack_sz + space_unit[del_id] - 1) /
-                     space_unit[del_id];
-      drop_num =
-          drop_num < package[del_id].first ? drop_num : package[del_id].first;
-      cur_sz -= space_unit[del_id] * drop_num;
-      package[del_id].first -= drop_num;
-    } else {
-      min_ts = 1e9;
-      for (int i = 10; i <= 16; i++) {
-        if (package[i].first) {
-          if (package[i].second < min_ts) {
-            min_ts = package[i].second;
-            del_id = i;
-          }
-        }
-      }
-
-      int drop_num = (cur_sz + need_space - pack_sz + space_unit[del_id] - 1) /
-                     space_unit[del_id];
-      drop_num =
-          drop_num < package[del_id].first ? drop_num : package[del_id].first;
-      cur_sz -= space_unit[del_id] * drop_num;
-      package[del_id].first -= drop_num;
+  vector<int> ids(17, 0);
+  iota(ids.begin(), ids.end(), 0);
+  sort(ids.begin(), ids.end(),
+       [&](auto &l, auto &r) { return package[l].second < package[r].second; });
+  for (auto &id : ids) {
+    if (cur_sz + need_space <= pack_sz) {
+      break;
     }
+    // only care about bullet
+    if (package[id].first == 0 || id == id1 || id == id2 || id < 14) {
+      continue;
+    }
+
+    int drop_num =
+        (cur_sz + need_space - pack_sz + space_unit[id] - 1) / space_unit[id];
+    drop_num = min(drop_num, package[id].first);
+    cur_sz -= space_unit[id] * drop_num;
+    package[id].first -= drop_num;
   }
+
+  for (auto &id : ids) {
+    if (cur_sz + need_space <= pack_sz) {
+      break;
+    }
+    if (package[id].first == 0) {
+      continue;
+    }
+
+    int drop_num =
+        (cur_sz + need_space - pack_sz + space_unit[id] - 1) / space_unit[id];
+    drop_num = min(drop_num, package[id].first);
+    cur_sz -= space_unit[id] * drop_num;
+    package[id].first -= drop_num;
+  }
+
   cur_sz += need_space;
   package[grid[x][y][0]].first += grid[x][y][1];
   package[grid[x][y][0]].second = timestamp;
@@ -187,17 +175,17 @@ int main() {
   } else {
     printf("%d\n", main_weapon);
     printf("%d\n", sec_weapon);
-    int pos[7];
-    for (int i = 0; i <= 6; i++) pos[i] = 10 + i;
-    for (int i = 0; i < 6; i++)
-      for (int j = i + 1; j <= 6; j++)
-        if (package[pos[i]].second > package[pos[j]].second) {
-          int tmp = pos[i];
-          pos[i] = pos[j];
-          pos[j] = tmp;
-        }
-    for (int i = 0; i <= 6; i++)
-      if (package[pos[i]].first)
-        printf("%d %d\n", pos[i], package[pos[i]].first);
+
+    vector<int> ids(17, 0);
+    iota(ids.begin(), ids.end(), 0);
+    sort(ids.begin(), ids.end(), [&](auto &l, auto &r) {
+      return package[l].second < package[r].second;
+    });
+
+    for (auto id : ids) {
+      if (package[id].first) {
+        printf("%d %d\n", id, package[id].first);
+      }
+    }
   }
 }
