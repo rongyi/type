@@ -15,6 +15,32 @@ struct TreeNode {
   }
 };
 
+class MaxPathSum {
+ public:
+  int findMaxPathSum(TreeNode *root) { return dfs(root); }
+
+ private:
+  int dfs(TreeNode *cur) {
+    if (!cur) {
+      return 0;
+    }
+    int l = dfs(cur->left_);
+    int r = dfs(cur->right_);
+    l = max(l, 0);
+    r = max(r, 0);
+    int cur_sum = l + r + cur->val_;
+    max_sum_ = max(max_sum_, cur_sum);
+
+    // chose the max subpath from this node
+    // and report to my parent this is the path
+    // you should go
+    return max(l, r) + cur->val_;
+  }
+
+ private:
+  int max_sum_ = 0;
+};
+
 class Diameter {
  public:
   int findDiameter(TreeNode *root) {
