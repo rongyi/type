@@ -15,6 +15,30 @@ struct TreeNode {
   }
 };
 
+class Diameter {
+ public:
+  int findDiameter(TreeNode *root) {
+    dfs(root);
+    return diameter_;
+  }
+
+ private:
+  int dfs(TreeNode *cur) {
+    if (!cur) {
+      return 0;
+    }
+    int l = dfs(cur->left_);
+    int r = dfs(cur->right_);
+    int cur_meter = l + r + 1;
+    diameter_ = max(diameter_, cur_meter);
+
+    return max(l, r) + 1;
+  }
+
+ private:
+  int diameter_ = 0;
+};
+
 class FindAllTreePaths {
  public:
   static vector<vector<int>> findPathes(TreeNode *root, int sum) {
