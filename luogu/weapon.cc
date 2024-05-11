@@ -19,8 +19,8 @@ int op_sz = 0;
 int ko = 0;
 using GridValue = array<int, 3>;
 vector<vector<GridValue>> grid =
-    vector<vector<GridValue>>(105, vector<GridValue>(105));
-vector<vector<int>> visited = vector<vector<int>>(105, vector<int>(105, 0));
+    vector<vector<GridValue>>(101, vector<GridValue>(101));
+vector<vector<int>> visited = vector<vector<int>>(101, vector<int>(101, 0));
 // 霰弹枪>突击步枪>射手步枪>栓动步枪>空手
 array<int, 10> gun_priority = {0, 3, 3, 2, 1, 3, 2, 2, 4, 4};
 
