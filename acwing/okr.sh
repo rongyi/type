@@ -1,7 +1,14 @@
 #!/bin/bash
 
-# deduplicate
-# some times also print the cc files
-git log --since=4.days --stat |grep '\.cc' |grep -v 'scratch' |awk -F'|' '{print $1}'  |sed -e 's/^  *//' -e 's/  *$//' |sort |uniq
 
-git log --since=4.days --stat |grep '\.cc' |grep -v 'scratch' |awk -F'|' '{print $1}'  |sed -e 's/^  *//' -e 's/  *$//' |sort |uniq  |wc -l
+git log --since=midnight --name-only --pretty=format:'' | grep -v '^$' | sort |uniq
+
+
+cnt=`git log --since=midnight --name-only --pretty=format:'' | grep -v '^$' |grep '.cc$' |sort |uniq | wc -l`
+echo "today you finished $cnt acwing in cpp, happy coding ry!"
+
+#git log --since='7 days ago' --name-only --pretty=format:'' | grep -v '^$' |grep '.rs$'
+
+
+cnt=`git log --since='7 days ago' --name-only --pretty=format:'' | grep -v '^$' |grep '.cc$' |sort|uniq| wc -l`
+echo "last 7 days you finished $cnt acwing in cpp, happy coding ry!"
