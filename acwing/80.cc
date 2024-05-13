@@ -15,6 +15,8 @@ public:
       map<int, int> cur;
       for (int i = 1; i <= 6; i++) {
         for (auto &kv : prev) {
+          // think it like a path, if parent path have multiple way to go here
+          // then child (sum with i) should add this number of ways to it
           cur[kv.first + i] += kv.second;
         }
       }
