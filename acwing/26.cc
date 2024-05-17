@@ -2,18 +2,24 @@
 
 class Solution {
 public:
-  int NumberOf1(int n) {
-    auto ret = 0;
-    // 1 oneway
-    // while (n) {
-    //   ret += 1;
-    //   int val = n & -n;
-    //   n -= val;
-    // }
-    while (n) {
-      ret += 1;
-      n &= (n - 1);
+  double Power(double base, long long exponent) {
+    if (base == 0) {
+      return 0;
     }
-    return ret;
+
+    if (exponent == 0) {
+      return 1;
+    }
+    if (exponent < 0) {
+      return 1 / Power(base, -exponent);
+    }
+    double res = 1.0;
+    for (long long i = exponent; i; i >>= 1) {
+      if (i & 1) {
+        res *= base;
+      }
+      base *= base;
+    }
+    return res;
   }
 };
