@@ -1,24 +1,28 @@
 #include "xxx.hpp"
+#include <vector>
 
 class Solution {
 public:
-  vector<vector<int>> printFromTopToBottom(TreeNode *root) {
-    vector<vector<int>> res;
-    dfs(root, 1, res);
+  bool verifySequenceOfBST(vector<int> nums) {
+    int sz = nums.size();
 
-    return res;
+    return dfs(nums, 0, sz - 1);
   }
-
-  void dfs(TreeNode *cur, int depth, vector<vector<int>> &res) {
-    if (!cur) {
-      return;
+  bool dfs(vector<int> &nums, int l, int r) {
+    if (l >= r) {
+      return true;
     }
-    if (res.size() < depth) {
-      res.push_back({});
+    auto root = nums[r];
+    int k = l;
+    while (nums[k] < root) {
+      k += 1;
     }
-    res[depth - 1].push_back(cur->val);
-
-    dfs(cur->left, depth + 1, res);
-    dfs(cur->right, depth + 1, res);
+    // from k -> r - 1 should all > root
+    for (int j = k; j < r; j++) {
+      if (nums[j] < root) {
+        return false;
+      }
+    }
+    return dfs(nums, l, k - 1) && dfs(nums, k, r - 1);
   }
 };
