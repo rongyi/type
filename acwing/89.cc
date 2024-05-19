@@ -1,26 +1,35 @@
-#include <iostream>
+#include <map>
 using namespace std;
 
-long long comput(int a, int b, int p) {
-  long long ret = 1 % p;
-  for (; b; b >>= 1) {
-    if (b & 1) {
-      ret = (ret * a) % p;
+struct ListNode {
+  int val;
+  ListNode *next, *random;
+  ListNode(int x) : val(x), next(nullptr), random(nullptr) {}
+};
+
+class Solution {
+public:
+  ListNode *copyRandomList(ListNode *head) {
+    ListNode cp(-1);
+    ListNode *tail = &cp;
+    ListNode *p = head;
+    map<ListNode *, ListNode *> clone;
+    while (p) {
+
+      tail->next = new ListNode(p->val);
+      tail = tail->next;
+      clone[p] = tail;
+
+      p = p->next;
     }
-    a = (long long)a * a % p;
+    tail = cp.next;
+    p = head;
+    while (p) {
+      tail->random = clone[p->random];
+      tail = tail->next;
+      p = p->next;
+    }
+
+    return cp.next;
   }
-
-  return ret;
-}
-
-int main() {
-  int a;
-  int b;
-  int p;
-
-  cin >> a;
-  cin >> b;
-  cin >> p;
-
-  cout << comput(a, b, p);
-}
+};
