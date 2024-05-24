@@ -2,18 +2,14 @@
 
 class Solution {
 public:
-  char firstNotRepeatingChar(string s) {
-    auto sz = s.size();
-    map<int, int> cnt;
-    for (auto c : s) {
-      cnt[c] += 1;
-    }
-    for (auto c : s) {
-      if (cnt[c] == 1) {
-        return c;
+  int getNumberOfK(vector<int> &nums, int k) {
+    auto cnt = 0;
+    for (auto &num : nums) {
+      if (num == k) {
+        cnt += 1;
       }
     }
 
-    return '#';
+    return cnt;
   }
 };
