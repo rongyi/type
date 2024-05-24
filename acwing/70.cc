@@ -2,29 +2,16 @@
 
 class Solution {
 public:
-  TreeNode *kthNode(TreeNode *root, int k) {
-    inorder(root, k);
-
-    return target_;
-  }
-
-private:
-  void inorder(TreeNode *cur, int k) {
-    if (!cur) {
-      return;
-    }
-    inorder(cur->left, k);
-    // visit
-    visit_cnt_ += 1;
-    if (visit_cnt_ == k) {
-      target_ = cur;
-      return;
+  int findNumberAppearingOnce(vector<int> &nums) {
+    auto val = 0;
+    for (int i = 0; i < 32; i++) {
+      auto cur = 0;
+      for (auto &num : nums) {
+        cur += (num >> i) & 1;
+      }
+      val |= (cur % 3) << i;
     }
 
-    inorder(cur->right, k);
+    return val;
   }
-
-private:
-  TreeNode *target_;
-  int visit_cnt_ = 0;
 };
