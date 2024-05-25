@@ -1,32 +1,22 @@
 #include "xxx.hpp"
-#include <deque>
+#include <vector>
 
 class Solution {
 public:
-  int lastRemaining(int n, int m) {
-    deque<int> q;
-    for (int i = 0; i < n; i++) {
-      q.push_back(i);
+  vector<int> multiply(const vector<int> &nums) {
+    auto sz = nums.size();
+    vector<int> right(sz, 1);
+    for (int i = sz - 2; i >= 0; i--) {
+      right[i] = right[i + 1] * nums[i + 1];
     }
-    int erase = 0;
-    while (q.size() >= 2) {
-      auto cur = q.front();
-      q.pop_front();
-
-      erase += 1;
-      if (erase == m) {
-        erase = 0;
-      } else {
-        q.push_back(cur);
-      }
+    long long m = 1;
+    vector<int> ret;
+    for (int i = 0; i < sz; i++) {
+      int val = m * right[i];
+      // for next round
+      m *= nums[i];
+      ret.push_back(val);
     }
-
-    return q.front();
+    return ret;
   }
 };
-
-int main() {
-  Solution so;
-  auto val = so.lastRemaining(5, 3);
-  cout << val << endl;
-}
