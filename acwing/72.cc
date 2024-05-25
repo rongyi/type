@@ -19,15 +19,14 @@ public:
         prefix_sum -= i;
         i += 1;
       }
-      if (prefix_sum == sum) {
+      // must be two size
+      if (prefix_sum == sum && i < j - 1) {
         vector<int> cur;
         // j already adanced
         for (int k = i; k < j; k++) {
           cur.push_back(k);
         }
-        if (cur.size() > 1) {
-          ret.push_back(cur);
-        }
+        ret.push_back(cur);
       }
     }
     return ret;
