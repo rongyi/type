@@ -1,51 +1,40 @@
-#include <algorithm>
-#include <iostream>
-#include <vector>
-using namespace std;
+#include "xxx.hpp"
 
 class Solution {
 public:
-  vector<vector<int>> permutation(vector<int> &nums) {
-    sort(nums.begin(), nums.end());
-
-    auto sz = nums.size();
-    vector<int> visited(sz, 0);
-    vector<int> cur;
-    vector<vector<int>> res;
-
-    recur(nums, 0, cur, visited, res);
-
-    return res;
-  }
-  void recur(vector<int> &nums, int cur_idx, vector<int> &cur,
-             vector<int> &visited, vector<vector<int>> &res) {
-    if (cur.size() == nums.size()) {
-      res.push_back(cur);
-      return;
-    }
-
-    for (int i = 0; i < nums.size(); i++) {
-      // dedup is pain in the ass
-      if (!visited[i] && (i == 0 || nums[i] != nums[i - 1] || visited[i - 1])) {
-
-        visited[i] = 1;
-        cur.push_back(nums[i]);
-        recur(nums, i + 1, cur, visited, res);
-        visited[i] = 0;
-        cur.pop_back();
+  int numberOf1Between1AndN_Solution(int n) {
+    int base = 1;
+    int ret = 0;
+    while (n / base != 0) {
+      // e.g. 389
+      //       ^  --> base = 10
+      // high = 3
+      // low = 9
+      // cur = 8
+      int high = n / (base * 10);
+      int low = n - (n / base) * base;
+      int cur = (n / base) % 10;
+      // e.g. 389
+      //       ^
+      // 去统计8这个位置上有多少个1，
+      // 1. 看三位数： high * base
+      //    比如这个例子三位高位就有三个，1 2 3
+      //    ，那么这个位置上固定好1以后，低位还可以从0-9，
+      //    所以乘以base是这个意思，
+      // 2. 高位没有了，从两位数看起
+      //    1. 如果为0， 没可能了，不考虑
+      //    2. 如果为1，那么后面低位还可以从0->low 也即 low + 1个数字
+      //    3. 如果>1, 那么固定1在这一位之后，低位还可以从0-9 10个可能
+      if (cur == 0) {
+        ret += high * base;
+      } else if (cur == 1) {
+        ret += high * base + low + 1;
+      } else {
+        ret += high * base + base;
       }
+
+      base *= 10;
     }
+    return ret;
   }
 };
-
-int main() {
-  Solution so;
-  vector<int> input{1, 1, 2};
-  auto ret = so.permutation(input);
-  for (auto &c : ret) {
-    for (auto &num : c) {
-      cout << num << " ";
-    }
-    cout << endl;
-  }
-}
