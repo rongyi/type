@@ -1,48 +1,51 @@
-#include <iostream>
+#include "xxx.hpp"
+#include <functional>
+#include <queue>
 #include <vector>
-using namespace std;
-
-/**
- * Definition for a binary tree node.
- */
-
-struct TreeNode {
-  int val;
-  TreeNode *left;
-  TreeNode *right;
-  TreeNode(int x) : val(x), left(NULL), right(NULL) {}
-};
 
 class Solution {
 public:
-  TreeNode *lowestCommonAncestor(TreeNode *root, TreeNode *p, TreeNode *q) {
-    if (!root) {
-      return nullptr;
+  void insert(int num) {
+    sz += 1;
+    max_pq.push(num);
+    while (max_pq.size() > sz / 2) {
+      auto cur = max_pq.top();
+      max_pq.pop();
+      min_pq.push(cur);
     }
-    if (p == root || q == root) {
-      return root;
+    // so max_pq can have one more
+    while (min_pq.size() > sz / 2) {
+      auto cur = min_pq.top();
+      min_pq.pop();
+      max_pq.push(cur);
     }
-    auto p_in_left = find_in_left(root->left, p);
-    auto q_in_left = find_in_left(root->left, q);
-    // at diff
-    if (p_in_left ^ q_in_left) {
-      return root;
-    }
-    if (p_in_left && q_in_left) {
-      return lowestCommonAncestor(root->left, p, q);
-    }
-    return lowestCommonAncestor(root->right, p, q);
   }
 
-  bool find_in_left(TreeNode *node, TreeNode *target) {
-    if (!node) {
-      return false;
+  double getMedian() {
+    // maxpq can have one more than minpq
+    // so middle is in maxpq
+    // else we get from two pq
+    if (sz & 1) {
+      auto cur = max_pq.top();
+      return cur;
+    } else {
+      auto val1 = max_pq.top();
+      auto val2 = min_pq.top();
+      return (val1 + val2) / 2.0;
     }
-    // pointer address compare, not value!
-    if (node == target) {
-      return true;
-    }
-    return find_in_left(node->left, target) ||
-           find_in_left(node->right, target);
   }
+
+private:
+  int sz = 0;
+  priority_queue<int, vector<int>, greater<int>> min_pq;
+  priority_queue<int, vector<int>, less<int>> max_pq;
 };
+
+int main() {
+  Solution so;
+  vector<int> input{-1, -1, 2};
+  for (auto &num : input) {
+    so.insert(num);
+    cout << so.getMedian() << endl;
+  }
+}
