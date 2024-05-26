@@ -2,7 +2,8 @@
 
 class Solution {
 public:
-  int numberOf1Between1AndN_Solution(int n) {
+// HELP
+int numberOf1Between1AndN_Solution(int n) {
     int base = 1;
     int ret = 0;
     while (n / base != 0) {
