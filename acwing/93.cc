@@ -1,27 +1,39 @@
+
+
+#include <algorithm>
 #include <iostream>
 #include <vector>
 using namespace std;
-
-void pick(int total, int i, vector<int> &picked) {
-  if (i == total + 1) {
-    for (auto &num : picked) {
-      cout << num << " ";
-    }
-    cout << endl;
-    return;
-  }
-
-  // don't pick current
-  pick(total, i + 1, picked);
-  // pick current
-  picked.push_back(i);
-  pick(total, i + 1, picked);
-  picked.pop_back();
-}
-
 int main() {
-  int n;
+  int n = 0;
   cin >> n;
-  vector<int> picked;
-  pick(n, 1, picked);
+
+  vector<vector<int>> grid(n, vector<int>(n, 0));
+  for (int i = 0; i < n; i++) {
+    for (int j = 0; j < n; j++) {
+      cin >> grid[i][j];
+    }
+  }
+  vector<vector<int>> dp(1 << n, vector<int>(n, 0x3f3f3f3f));
+  dp[1][0] = 0;
+
+  for (int cur_state = 1; cur_state < (1 << n); cur_state++) {
+    // 以i为end节点
+    for (int i = 0; i < n; i++) {
+      // 那么至少i节点要在这个全局状态里面嘛
+      if ((cur_state >> i) & 1) {
+        // 假设最后一跳是从j走过来到达i，状态转移方程
+        auto withouti_state = cur_state ^ (1 << i);
+        for (int j = 0; j < n; j++) {
+          if ((withouti_state >> j) & 1) {
+            dp[cur_state][i] =
+                min(dp[cur_state][i], dp[withouti_state][j] + grid[j][i]);
+          }
+        }
+      }
+    }
+  }
+  cout << dp[(1 << n) - 1][n - 1] << endl;
+
+  return 0;
 }
