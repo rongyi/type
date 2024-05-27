@@ -21,19 +21,17 @@ int main() {    //  |
     y++;
     grid[x][y] += w;
   }
-  // now prefix sum
   for (int i = 1; i <= 5001; i++) {
     for (int j = 1; j <= 5001; j++) {
       grid[i][j] += grid[i - 1][j] + grid[i][j - 1] - grid[i - 1][j - 1];
     }
   }
-
   int max_weight = 0;
   for (int i = r; i <= 5001; i++) {
     for (int j = r; j <= 5001; j++) {
-      int cur_sum =
+      int val =
           grid[i][j] - grid[i - r][j] - grid[i][j - r] + grid[i - r][j - r];
-      max_weight = max(max_weight, cur_sum);
+      max_weight = max(max_weight, val);
     }
   }
   cout << max_weight << endl;
