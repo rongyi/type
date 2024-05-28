@@ -11,14 +11,16 @@ int main() {
     std::cin >> val;
     nums.push_back(val);
   }
-
-  vector<long long> diff;
-  for (int i = 1; i < nums.size(); i++) {
-    diff.push_back(nums[i] - (long long)nums[i - 1]);
+  for (int i = nums.size() - 1; i >= 1; i--) {
+    nums[i] -= nums[i - 1];
   }
+
   long long pos_sum = 0;
   long long neg_sum = 0;
-  for (auto &num : diff) {
+
+  // ignore the leading value
+  for (int i = 1; i < nums.size(); i++) {
+    auto num = nums[i];
     if (num >= 0) {
       pos_sum += num;
     } else {
