@@ -3,6 +3,7 @@
 #include <vector>
 using namespace std;
 
+// binary search
 bool check(vector<int> &nums, double avg, int gap) {
   int sz = nums.size();
   vector<double> prefix(sz, 0);
