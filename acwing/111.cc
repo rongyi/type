@@ -4,10 +4,10 @@
 using namespace std;
 
 const int N = 5e5 + 5;
-int input[N];
-int sorted[N];
-// for mergesort output
-int tmp[N];
+
+long long input[N];
+long long sorted[N];
+long long tmp[N];
 
 int n;
 int m;
@@ -15,8 +15,8 @@ long long t;
 
 void mergesort(int l, int mid, int r) {
   int i = l;
-  int k = l;
   int j = mid + 1;
+  int k = l;
   while (i <= mid && j <= r) {
     if (sorted[i] <= sorted[j]) {
       tmp[k++] = sorted[i++];
@@ -32,7 +32,7 @@ void mergesort(int l, int mid, int r) {
   }
 }
 
-// inclusive
+// l->mid mid + 1-> r
 bool check(int l, int mid, int r) {
   for (int i = mid + 1; i <= r; i++) {
     sorted[i] = input[i];
@@ -41,13 +41,11 @@ bool check(int l, int mid, int r) {
   mergesort(l, mid, r);
 
   long long sum = 0;
-
   for (int i = 0; i < m; i++) {
     if (l + i >= r - i) {
       break;
     }
-    long long val = (tmp[l + i] - tmp[r - i]);
-    sum += val * val;
+    sum += (tmp[r - i] - tmp[l + i]) * (tmp[r - i] - tmp[l + i]);
   }
 
   return sum <= t;
@@ -74,23 +72,27 @@ int binary(int l, int r) {
 int main() {
   std::ios::sync_with_stdio(false);
   int round;
-  cin >> round;
+  std::cin >> round;
   while (round--) {
     cin >> n >> m >> t;
+
     for (int i = 1; i <= n; i++) {
       cin >> input[i];
       sorted[i] = input[i];
     }
 
-    // both inclusive
+    // now we check
+    int chunk = 0;
+    // inclusive
     int l = 1;
     int r = n;
-    int ret = 0;
+
     while (l <= r) {
       l = binary(l, r) + 1;
-      ret += 1;
+      chunk += 1;
     }
-    cout << ret << endl;
+
+    cout << chunk << endl;
   }
 
   return 0;
