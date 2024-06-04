@@ -22,6 +22,7 @@ int main() {
     cin >> val2;
     cows.push_back({val1, val2});
   }
+  // 按照防晒区间的end来排序，把大的留在后面给其他牛使用
   sort(cows.begin(), cows.end(), [](pair<int, int> &l, pair<int, int> &r) {
     return l.second < r.second;
   });
