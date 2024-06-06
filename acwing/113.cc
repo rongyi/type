@@ -30,6 +30,9 @@ int main() {
     auto start = cows[i][0];
     auto end = cows[i][1];
     auto idx = cows[i][2];
+    // 每次都去找之前最早结束的那个牛栏，找到就复用，找不到就
+    // 新开一个牛栏，编号顺延
+    // 什么情况下能用？这个牛栏里的牛结束吃草时间早于下一个牛开始的
     if (pq.empty() || pq.top()[0] >= start) {
       int next_idx = pq.size();
       pq.push({end, next_idx});
