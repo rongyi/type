@@ -2,6 +2,7 @@
 #include <cmath>
 #include <ios>
 #include <iostream>
+#include <limits>
 #include <vector>
 using namespace std;
 
@@ -32,7 +33,8 @@ int main() {
   // sort(ranges.begin(), ranges.end());
 
   int ret = 0;
-  double prev_radar = -1e10;
+  // double limist still a postive number, wtf
+  double prev_radar = numeric_limits<int>::min();
 
   for (int i = 0; i < n; i++) {
     if (ranges[i].first > prev_radar) {
