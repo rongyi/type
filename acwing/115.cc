@@ -7,7 +7,7 @@ using namespace std;
 // Forward declaration of compare API.
 // bool compare(int a, int b);
 // return bool means whether a is less than b.
-
+bool compare(int l, int r);
 class Solution {
 public:
   vector<int> specialSort(int N) {
