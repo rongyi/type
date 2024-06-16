@@ -57,3 +57,29 @@ int main() {
 
   return 0;
 }
+
+int debug() {
+  int origin = 10;
+  int target = 3;
+  vector<int> number{1, 2, 3};
+
+  reverse(number.begin(), number.end());
+  vector<int> output;
+  while (number.size()) {
+    int r = 0;
+    for (int i = number.size() - 1; i >= 0; i--) {
+      number[i] += r * origin;
+      r = number[i] % target;
+      number[i] /= target;
+    }
+    output.push_back(r);
+    while (number.size() && number.back() == 0) {
+      number.pop_back();
+    }
+  }
+  for (auto &num : output) {
+    cout << num << " ";
+  }
+  cout << endl;
+  return 0;
+}
