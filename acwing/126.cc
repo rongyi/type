@@ -67,6 +67,7 @@ int debug() {
   vector<int> output;
   while (number.size()) {
     int r = 0;
+    // reduce from high bit to low
     for (int i = number.size() - 1; i >= 0; i--) {
       number[i] += r * origin;
       r = number[i] % target;
